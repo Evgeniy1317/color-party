@@ -39,19 +39,42 @@ local function without(list: { string }, banned: { [string]: boolean }): { strin
 	return result
 end
 
--- Выбирает палитру матча: COLORS_PER_MATCH случайных цветов из общего пула.
+-- Палитра матча: цвета далеко друг от друга по тону, чтобы их нельзя было перепутать.
 function RoundRules.matchPalette(rng: Random): { string }
-	local ids = {}
+	local chromatic: { { id: string, hue: number } } = {}
 	for _, def in Config.COLORS do
-		table.insert(ids, def.id)
+		local hue, saturation, value = def.color:ToHSV()
+		if saturation >= 0.2 and value >= 0.25 then
+			table.insert(chromatic, { id = def.id, hue = hue })
+		end
 	end
-	for n = #ids, 2, -1 do
-		local m = rng:NextInteger(1, n)
-		ids[n], ids[m] = ids[m], ids[n]
+	table.sort(chromatic, function(a, b)
+		return a.hue < b.hue
+	end)
+	local want = math.min(Config.COLORS_PER_MATCH, #chromatic)
+	local chosen: { string } = {}
+	local hues: { number } = {}
+	if want == 0 then
+		return chosen
 	end
-	local chosen = {}
-	for i = 1, math.min(Config.COLORS_PER_MATCH, #ids) do
-		chosen[i] = ids[i]
+	local start = rng:NextInteger(1, #chromatic)
+	for step = 0, #chromatic - 1 do
+		local item = chromatic[(start + step - 1) % #chromatic + 1]
+		local far = true
+		for _, hue in hues do
+			local delta = math.abs(item.hue - hue)
+			if math.min(delta, 1 - delta) < 0.07 then
+				far = false
+				break
+			end
+		end
+		if far then
+			table.insert(chosen, item.id)
+			table.insert(hues, item.hue)
+		end
+		if #chosen >= want then
+			break
+		end
 	end
 	return chosen
 end
@@ -94,8 +117,8 @@ function RoundRules.pick(round: number, palette: { string }, rng: Random, lastTa
 			shown = { a, b },
 			time = time,
 			assign = {
-				{ id = a, fraction = 0.065, spread = true },
-				{ id = b, fraction = 0.065, spread = true },
+				{ id = a, fraction = 0.24, spread = true },
+				{ id = b, fraction = 0.24, spread = true },
 			},
 			fillers = without(palette, banned),
 			hubId = pick(rng, without(palette, banned)),
@@ -144,8 +167,8 @@ function RoundRules.shrinkCount(round: number, rng: Random): number
 	return rng:NextInteger(Config.SHRINK_COUNT[1], Config.SHRINK_COUNT[2])
 end
 
-function RoundRules.isSafe(rule: Rule, colorId: string?, isHub: boolean): boolean
-	if not colorId or colorId == "" or isHub then
+function RoundRules.isSafe(rule: Rule, colorId: string?, _isHub: boolean?): boolean
+	if typeof(colorId) ~= "string" or colorId == "" then
 		return false
 	end
 	return table.find(rule.targets, colorId) ~= nil

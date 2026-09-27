@@ -9,7 +9,7 @@ local NAMES = {
 	"QueueUpdate", -- сервер → все: { count, timeLeft, waitingArena, active = {slot...} }
 	"MatchState", -- сервер → участники/зрители: { phase, slot, ... }
 	"RoundEvent", -- сервер → участники/зрители: (text: string, kind: string)
-	"Spectate", -- клиент → сервер: запрос; сервер → клиент: (slot, center: Vector3, stop: boolean?)
+	"Spectate", -- клиент → сервер: "start" | "next" | "prev" | "stop"; сервер → клиент: { ok, slot, center, index, total, message? }
 	"Economy", -- сервер → клиент: { coins, delta, reason }
 	"Reaction", -- клиент → сервер → всем: (emoji: string)
 }

@@ -6,7 +6,14 @@
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local ServerStorage = game:GetService("ServerStorage")
+local InsertService = game:GetService("InsertService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
+
+-- Модели из Creator Store (бесплатные), кэшируются в ServerStorage.Assets при bake.
+local TOOLBOX = {
+	ConsoleKiosk = 12705353460, -- binkNYC kiosk
+	LobbySpyglass = 126082088402161, -- Binoculars Spyglass Telescope Viewfinder
+}
 
 -- Текстуры, загруженные в Roblox (сгенерированы под этот проект).
 local DOME_TEXTURE = "rbxassetid://101100163595514" -- бесшовная мягкая радуга
@@ -406,6 +413,187 @@ local function pointOnLobby(angleDegrees: number, radius: number, y: number): Ve
 	return Vector3.new(LOBBY_CENTER.X + math.cos(angle) * radius, y, LOBBY_CENTER.Z + math.sin(angle) * radius)
 end
 
+local function lobbyAssets(): Folder
+	local assets = ServerStorage:FindFirstChild("Assets")
+	if not assets then
+		assets = Instance.new("Folder")
+		assets.Name = "Assets"
+		assets.Parent = ServerStorage
+	end
+	return assets :: Folder
+end
+
+local function stripToolScripts(root: Instance)
+	for _, item in root:GetDescendants() do
+		if item:IsA("Script") or item:IsA("LocalScript") or item:IsA("ModuleScript") then
+			item:Destroy()
+		end
+	end
+end
+
+local function ensureToolboxTemplate(name: string, assetId: number): Model?
+	local assets = lobbyAssets()
+	local existing = assets:FindFirstChild(name)
+	if existing and existing:IsA("Model") then
+		return existing
+	end
+	local ok, loaded = pcall(function()
+		return InsertService:LoadAsset(assetId)
+	end)
+	if not ok or not loaded then
+		warn("[LobbyBuilder] не удалось загрузить toolbox " .. name .. ": " .. tostring(loaded))
+		return nil
+	end
+	local model: Model? = nil
+	for _, child in loaded:GetChildren() do
+		if child:IsA("Model") then
+			model = child
+			break
+		end
+	end
+	loaded:Destroy()
+	if not model then
+		return nil
+	end
+	stripToolScripts(model)
+	model.Name = name
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+		end
+	end
+	model.Parent = assets
+	return model
+end
+
+local function cloneToolbox(name: string, assetId: number): Model?
+	local template = ensureToolboxTemplate(name, assetId)
+	return if template then template:Clone() else nil
+end
+
+local function pivotModelBottom(model: Model, cf: CFrame)
+	local _, size = model:GetBoundingBox()
+	model:PivotTo(cf * CFrame.new(0, size.Y / 2, 0))
+end
+
+-- Табло на стене: фиксированный размер в студах, текст не раздувается с дистанцией.
+local function buildArenaBoard(parent: Instance, cf: CFrame): BasePart
+	local white = Color3.fromRGB(248, 248, 252)
+	local dark = Color3.fromRGB(28, 26, 40)
+	local gold = Color3.fromRGB(255, 214, 120)
+	local muted = Color3.fromRGB(176, 182, 206)
+	part({
+		Name = "MatchSignFrame",
+		Size = Vector3.new(14.4, 16.6, 0.22),
+		CFrame = cf * CFrame.new(0, 0, 0.08),
+		Color = white,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = parent,
+	})
+	local sign = part({
+		Name = "MatchSign",
+		Size = Vector3.new(13.6, 15.8, 0.2),
+		CFrame = cf,
+		Color = dark,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = parent,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BoardGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 36
+	gui.LightInfluence = 0.1
+	gui.Brightness = 1.3
+	gui.Parent = sign
+
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0.14, 0)
+	header.BackgroundColor3 = gold
+	header.BorderSizePixel = 0
+	header.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.fromScale(1, 1)
+	title.Font = Enum.Font.GothamBlack
+	title.TextSize = 42
+	title.TextColor3 = dark
+	title.Text = "КТО СЕЙЧАС ИГРАЕТ"
+	title.Parent = header
+
+	local function columnHead(labelName: string, x: number, text: string, align: Enum.TextXAlignment)
+		local l = Instance.new("TextLabel")
+		l.Name = labelName
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromScale(x, 0.145)
+		l.Size = UDim2.fromScale(0.42, 0.07)
+		l.Font = Enum.Font.GothamBold
+		l.TextSize = 22
+		l.TextXAlignment = align
+		l.TextColor3 = muted
+		l.Text = text
+		l.Parent = gui
+	end
+	columnHead("HeadArena", 0.08, "АРЕНА", Enum.TextXAlignment.Left)
+	columnHead("HeadPlayers", 0.5, "ИГРОКИ", Enum.TextXAlignment.Right)
+
+	for index = 1, 6 do
+		local row = Instance.new("Frame")
+		row.Name = "Row" .. index
+		row.Position = UDim2.new(0.05, 0, 0.22 + (index - 1) * 0.1, 0)
+		row.Size = UDim2.new(0.9, 0, 0.09, 0)
+		row.BackgroundColor3 = if index % 2 == 0 then Color3.fromRGB(46, 44, 62) else Color3.fromRGB(38, 36, 52)
+		row.BorderSizePixel = 0
+		row.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.28, 0)
+		corner.Parent = row
+		local name = Instance.new("TextLabel")
+		name.Name = "A" .. index
+		name.BackgroundTransparency = 1
+		name.Position = UDim2.fromScale(0.05, 0)
+		name.Size = UDim2.fromScale(0.5, 1)
+		name.Font = Enum.Font.GothamBold
+		name.TextSize = 30
+		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.TextColor3 = white
+		name.Text = "Арена  " .. index
+		name.Parent = row
+		local count = Instance.new("TextLabel")
+		count.Name = "C" .. index
+		count.BackgroundTransparency = 1
+		count.Position = UDim2.fromScale(0.52, 0)
+		count.Size = UDim2.fromScale(0.42, 1)
+		count.Font = Enum.Font.GothamBlack
+		count.TextSize = 32
+		count.TextXAlignment = Enum.TextXAlignment.Right
+		count.TextColor3 = muted
+		count.Text = "—"
+		count.Parent = row
+	end
+
+	local footer = Instance.new("Frame")
+	footer.Name = "Footer"
+	footer.Position = UDim2.fromScale(0, 0.84)
+	footer.Size = UDim2.fromScale(1, 0.16)
+	footer.BackgroundColor3 = Color3.fromRGB(22, 48, 40)
+	footer.BorderSizePixel = 0
+	footer.Parent = gui
+	local queue = Instance.new("TextLabel")
+	queue.Name = "Queue"
+	queue.BackgroundTransparency = 1
+	queue.Size = UDim2.fromScale(1, 1)
+	queue.Font = Enum.Font.GothamBold
+	queue.TextSize = 26
+	queue.TextColor3 = Color3.fromRGB(186, 236, 206)
+	queue.Text = "Готовы к матчу    0 / 5"
+	queue.Parent = footer
+	return sign
+end
+
 local function addScript(parent: Instance, name: string, source: string)
 	local runtime = Instance.new("Script")
 	runtime.Name = name
@@ -569,7 +757,8 @@ function LobbyBuilder.buildLobby(world: Folder)
 	spawn.Duration = 0
 	spawn.Size = Vector3.new(6, 0.3, 6)
 	spawn.Transparency = 1
-	spawn.CFrame = CFrame.new(0, SURFACE + 0.6, LOBBY_Z)
+	-- Лицом к окну: арены лежат в +Z от центра лобби.
+	spawn.CFrame = CFrame.lookAt(Vector3.new(0, SURFACE + 0.6, LOBBY_Z), Vector3.new(0, SURFACE + 0.6, 0))
 	spawn.Material = Enum.Material.SmoothPlastic
 	spawn.Color = Color3.fromRGB(255, 255, 255)
 	spawn.TopSurface = Enum.SurfaceType.Smooth
@@ -1700,7 +1889,7 @@ function LobbyBuilder.buildSystems(world: Folder)
 	end
 end
 
--- Консоль матча у окна: экран очереди, кнопка «Готов» и «Смотреть арену».
+-- Консоль у окна: модели из Toolbox + Billboard с очередью (всегда читается).
 function LobbyBuilder.buildConsole(world: Folder)
 	local lobby = world:FindFirstChild("Lobby") or subfolder(world, "Lobby")
 	local old = lobby:FindFirstChild("Console")
@@ -1711,86 +1900,86 @@ function LobbyBuilder.buildConsole(world: Folder)
 	console.Name = "Console"
 	console.Parent = lobby
 
-	local white = Color3.fromRGB(246, 246, 250)
-	local dark = Color3.fromRGB(58, 54, 72)
-	local function stand(angle: number, radius: number, width: number, name: string): (Part, CFrame)
-		local pos = pointOnLobby(angle, radius, SURFACE)
-		local face = CFrame.lookAt(Vector3.new(pos.X, SURFACE, pos.Z), Vector3.new(LOBBY_CENTER.X, SURFACE, LOBBY_CENTER.Z))
-		part({ Name = name .. "Foot", Size = Vector3.new(width - 2, 0.6, 3.4), CFrame = face * CFrame.new(0, 0.3, 0), Color = dark, Material = Enum.Material.SmoothPlastic, Parent = console })
-		local body = part({ Name = name .. "Body", Size = Vector3.new(width, 2.8, 2.6), CFrame = face * CFrame.new(0, 2.0, 0), Color = white, Material = Enum.Material.SmoothPlastic, Parent = console })
-		return body, face
+	local function wallFrame(angleDeg: number, radius: number, y: number): CFrame
+		local pos = pointOnLobby(angleDeg, radius, y)
+		return CFrame.lookAt(Vector3.new(pos.X, y, pos.Z), Vector3.new(LOBBY_CENTER.X, y, LOBBY_CENTER.Z))
 	end
 
-	-- Главная консоль с экраном: сбоку от окна и ниже подоконника, чтобы не закрывать вид.
-	local body, face = stand(78, 97, 14, "Main")
-	local screen = part({
-		Name = "Screen",
-		Size = Vector3.new(14, 4.6, 0.8),
-		CFrame = face * CFrame.new(0, 5.0, 0.5) * CFrame.Angles(math.rad(-28), 0, 0),
-		Color = dark,
-		Material = Enum.Material.SmoothPlastic,
-		Parent = console,
-	})
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = Enum.NormalId.Front
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 48
-	gui.LightInfluence = 0.2
-	gui.Brightness = 1.3
-	gui.Parent = screen
-	local bg = Instance.new("Frame")
-	bg.Name = "Fill"
-	bg.Size = UDim2.fromScale(1, 1)
-	bg.BackgroundColor3 = Color3.fromRGB(40, 38, 54)
-	bg.BorderSizePixel = 0
-	bg.Parent = gui
-	local function line(name: string, y: number, h: number, text: string, size: number, color: Color3, font: Enum.Font)
-		local l = Instance.new("TextLabel")
-		l.Name = name
-		l.BackgroundTransparency = 1
-		l.Position = UDim2.fromScale(0.04, y)
-		l.Size = UDim2.fromScale(0.92, h)
-		l.Font = font
-		l.Text = text
-		l.TextSize = size
-		l.TextColor3 = color
-		l.TextWrapped = true
-		l.Parent = bg
-	end
-	line("Title", 0.04, 0.2, "COLOR PARTY  ·  МАТЧ", 34, Color3.fromRGB(255, 214, 120), Enum.Font.GothamBold)
-	line("Queue", 0.24, 0.3, "В очереди: 0 / 10", 56, white, Enum.Font.GothamBlack)
-	line("Status", 0.54, 0.2, "Арены свободны", 30, Color3.fromRGB(200, 210, 240), Enum.Font.GothamMedium)
-	line("Hint", 0.76, 0.2, "Подойди и нажми E — ГОТОВ", 28, Color3.fromRGB(180, 236, 200), Enum.Font.GothamMedium)
-
+	-- Коралловая панель сразу слева от стекла (сектор 60–70°).
+	local boardCf = wallFrame(65, 103, SURFACE + 11)
+	local sign = buildArenaBoard(console, boardCf)
 	local ready = Instance.new("ProximityPrompt")
 	ready.Name = "ReadyPrompt"
 	ready.ActionText = "Готов к матчу"
-	ready.ObjectText = "Color Party"
+	ready.ObjectText = "Табло арен"
 	ready.HoldDuration = 0
 	ready.MaxActivationDistance = 12
 	ready.RequiresLineOfSight = false
-	ready.Parent = body
+	ready.Parent = sign
 
-	-- Стойка трансляции: смотреть случайную активную арену.
-	local watchBody = stand(102, 97, 6, "Watch")
-	local eye = part({
-		Name = "WatchLens",
-		Size = Vector3.new(3.2, 3.2, 1.2),
-		CFrame = watchBody.CFrame * CFrame.new(0, 3.2, 0),
-		Color = Color3.fromRGB(112, 176, 255),
-		Material = Enum.Material.SmoothPlastic,
-		Shape = Enum.PartType.Cylinder,
-		Parent = console,
-	})
-	eye.CFrame = watchBody.CFrame * CFrame.new(0, 3.2, 0) * CFrame.Angles(0, math.rad(90), 0)
+	-- Бинокль у самого стекла, справа в проёме: подходишь и смотришь в окуляры наружу.
+	-- Взгляд модели — локальная −X (деталь View).
+	local scopePos = pointOnLobby(104, 106, SURFACE)
+	local lookTarget = pointOnLobby(90, 160, SURFACE + 5)
+	local scopeModel = cloneToolbox("LobbySpyglass", TOOLBOX.LobbySpyglass)
+	local scopeRoot: BasePart
+	if scopeModel then
+		scopeModel.Name = "Spyglass"
+		scopeModel:ScaleTo(1.25)
+		local stand = Vector3.new(scopePos.X, SURFACE + 5, scopePos.Z)
+		local lookCf = CFrame.lookAt(stand, Vector3.new(lookTarget.X, stand.Y, lookTarget.Z))
+		scopeModel:PivotTo(lookCf * CFrame.Angles(0, math.rad(-90), 0))
+		local lowest = math.huge
+		for _, item in scopeModel:GetDescendants() do
+			if item:IsA("BasePart") then
+				lowest = math.min(lowest, item.Position.Y - item.Size.Y / 2)
+			end
+		end
+		-- Ножки на полу, окуляры на высоте глаз (~5 студов).
+		local lift = SURFACE + 0.15 - lowest
+		scopeModel:PivotTo(scopeModel:GetPivot() + Vector3.new(0, lift + 1.1, 0))
+		part({
+			Name = "ScopePedestal",
+			Size = Vector3.new(3.2, 1.15, 3.2),
+			CFrame = CFrame.new(scopePos.X, SURFACE + 0.55, scopePos.Z),
+			Color = Color3.fromRGB(246, 246, 250),
+			Material = Enum.Material.SmoothPlastic,
+			Parent = console,
+		})
+		scopeModel.Parent = console
+		local bounds = scopeModel:GetBoundingBox()
+		scopeRoot = part({
+			Name = "ScopePromptHost",
+			Size = Vector3.new(2.2, 2.2, 2.2),
+			CFrame = CFrame.new(bounds.Position),
+			Color = Color3.new(1, 1, 1),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 1,
+			CanCollide = false,
+			Parent = console,
+		})
+	else
+		warn("[LobbyBuilder] LobbySpyglass не загружен")
+		scopeRoot = part({
+			Name = "ScopePromptHost",
+			Size = Vector3.new(2.2, 2.2, 2.2),
+			CFrame = CFrame.new(scopePos + Vector3.new(0, 3, 0)),
+			Color = Color3.new(1, 1, 1),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 1,
+			CanCollide = false,
+			Parent = console,
+		})
+	end
+
 	local watch = Instance.new("ProximityPrompt")
 	watch.Name = "WatchPrompt"
-	watch.ActionText = "Смотреть арену"
-	watch.ObjectText = "Трансляция"
+	watch.ActionText = "Смотреть арены"
+	watch.ObjectText = "Подзорная труба"
 	watch.HoldDuration = 0
-	watch.MaxActivationDistance = 10
+	watch.MaxActivationDistance = 12
 	watch.RequiresLineOfSight = false
-	watch.Parent = watchBody
+	watch.Parent = scopeRoot
 end
 
 function LobbyBuilder.build()

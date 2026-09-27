@@ -67,61 +67,64 @@ gui.Parent = player:WaitForChild("PlayerGui")
 local card = Instance.new("Frame")
 card.Name = "Card"
 card.AnchorPoint = Vector2.new(0.5, 0)
-card.Position = UDim2.new(0.5, 0, 0, 16)
-card.Size = UDim2.fromOffset(460, 150)
+card.Position = UDim2.new(0.5, 0, 0, 10)
+card.Size = UDim2.fromOffset(392, 100)
 card.BackgroundColor3 = PANEL
-card.BackgroundTransparency = 0.18
+card.BackgroundTransparency = 0
 card.BorderSizePixel = 0
 card.Visible = false
 card.Parent = gui
-corner(card, 20)
+corner(card, 18)
 local cardStroke = Instance.new("UIStroke")
-cardStroke.Thickness = 3
-cardStroke.Color = WHITE
-cardStroke.Transparency = 0.7
+cardStroke.Thickness = 2
+cardStroke.Color = Color3.fromRGB(255, 255, 255)
+cardStroke.Transparency = 0.82
 cardStroke.Parent = card
 
 local swatch = Instance.new("Frame")
 swatch.Name = "Swatch"
-swatch.Position = UDim2.fromOffset(14, 14)
-swatch.Size = UDim2.fromOffset(104, 104)
+swatch.Position = UDim2.fromOffset(10, 10)
+swatch.Size = UDim2.fromOffset(80, 80)
 swatch.BackgroundColor3 = WHITE
 swatch.BorderSizePixel = 0
+swatch.ClipsDescendants = true
 swatch.Parent = card
 corner(swatch, 16)
 local swatchB = Instance.new("Frame")
 swatchB.Name = "SwatchB"
-swatchB.AnchorPoint = Vector2.new(1, 1)
-swatchB.Position = UDim2.fromScale(1, 1)
+swatchB.AnchorPoint = Vector2.new(1, 0)
+swatchB.Position = UDim2.fromScale(1, 0)
 swatchB.Size = UDim2.fromScale(0.5, 1)
 swatchB.BackgroundColor3 = WHITE
 swatchB.BorderSizePixel = 0
 swatchB.Visible = false
-swatchB.Parent = swatch
-corner(swatchB, 16)
-local swatchMark = label(swatch, "Mark", "", 64, Enum.Font.GothamBlack, WHITE)
+swatchB.Parent = card
+corner(swatchB, 20)
+local swatchMark = label(swatch, "Mark", "", 32, Enum.Font.GothamBlack, WHITE)
 swatchMark.Size = UDim2.fromScale(1, 1)
+swatchMark.ZIndex = 2
 
-local roundLabel = label(card, "Round", "РАУНД 1", 14, Enum.Font.GothamBold, MUTED)
-roundLabel.Position = UDim2.fromOffset(132, 14)
-roundLabel.Size = UDim2.fromOffset(300, 18)
+local roundLabel = label(card, "Round", "РАУНД 1", 12, Enum.Font.GothamBold, MUTED)
+roundLabel.Position = UDim2.fromOffset(102, 8)
+roundLabel.Size = UDim2.fromOffset(180, 16)
 roundLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local nameLabel = label(card, "Name", "СИНИЙ", 40, Enum.Font.GothamBlack, WHITE)
-nameLabel.Position = UDim2.fromOffset(130, 32)
-nameLabel.Size = UDim2.fromOffset(316, 50)
+local nameLabel = label(card, "Name", "СИНИЙ", 22, Enum.Font.GothamBlack, WHITE)
+nameLabel.Position = UDim2.fromOffset(102, 24)
+nameLabel.Size = UDim2.fromOffset(200, 28)
 nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-nameLabel.TextScaled = true
+nameLabel.TextYAlignment = Enum.TextYAlignment.Center
+nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
-local subLabel = label(card, "Sub", "Встань на этот цвет!", 16, Enum.Font.GothamMedium, MUTED)
-subLabel.Position = UDim2.fromOffset(132, 84)
-subLabel.Size = UDim2.fromOffset(310, 22)
+local subLabel = label(card, "Sub", "Встань на этот цвет!", 13, Enum.Font.GothamMedium, MUTED)
+subLabel.Position = UDim2.fromOffset(102, 52)
+subLabel.Size = UDim2.fromOffset(210, 16)
 subLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local barBack = Instance.new("Frame")
 barBack.Name = "BarBack"
-barBack.Position = UDim2.fromOffset(132, 116)
-barBack.Size = UDim2.fromOffset(256, 14)
+barBack.Position = UDim2.fromOffset(102, 74)
+barBack.Size = UDim2.fromOffset(200, 10)
 barBack.BackgroundColor3 = Color3.fromRGB(60, 58, 80)
 barBack.BorderSizePixel = 0
 barBack.Parent = card
@@ -134,51 +137,51 @@ bar.BorderSizePixel = 0
 bar.Parent = barBack
 corner(bar, 7)
 
-local timeLabel = label(card, "Time", "7.0", 22, Enum.Font.GothamBlack, WHITE)
-timeLabel.Position = UDim2.fromOffset(394, 108)
-timeLabel.Size = UDim2.fromOffset(56, 30)
+local timeLabel = label(card, "Time", "7.0", 18, Enum.Font.GothamBlack, WHITE)
+timeLabel.Position = UDim2.fromOffset(312, 66)
+timeLabel.Size = UDim2.fromOffset(68, 24)
 timeLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 -- Статус под карточкой: игроки, жизни, серия.
 local status = Instance.new("Frame")
 status.Name = "Status"
 status.AnchorPoint = Vector2.new(0.5, 0)
-status.Position = UDim2.new(0.5, 0, 0, 174)
-status.Size = UDim2.fromOffset(460, 34)
+status.Position = UDim2.new(0.5, 0, 0, 116)
+status.Size = UDim2.fromOffset(392, 34)
 status.BackgroundColor3 = PANEL
-status.BackgroundTransparency = 0.3
+status.BackgroundTransparency = 0.08
 status.BorderSizePixel = 0
 status.Visible = false
 status.Parent = gui
 corner(status, 12)
 
-local aliveLabel = label(status, "Alive", "Осталось 10 / 10", 15, Enum.Font.GothamBold, WHITE)
-aliveLabel.Position = UDim2.fromOffset(14, 0)
-aliveLabel.Size = UDim2.fromOffset(180, 34)
+local aliveLabel = label(status, "Alive", "Осталось 5 / 5", 14, Enum.Font.GothamBold, WHITE)
+aliveLabel.Position = UDim2.fromOffset(12, 0)
+aliveLabel.Size = UDim2.fromOffset(150, 34)
 aliveLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local livesLabel = label(status, "Lives", "♥ ♥", 20, Enum.Font.GothamBlack, Color3.fromRGB(255, 110, 130))
-livesLabel.Position = UDim2.fromOffset(200, 0)
-livesLabel.Size = UDim2.fromOffset(80, 34)
+local livesLabel = label(status, "Lives", "♥  ♥", 16, Enum.Font.GothamBlack, Color3.fromRGB(255, 120, 145))
+livesLabel.Position = UDim2.fromOffset(156, 0)
+livesLabel.Size = UDim2.fromOffset(70, 34)
 
-local streakLabel = label(status, "Streak", "Серия ×1.0", 15, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
+local streakLabel = label(status, "Streak", "Серия  ×1.0", 14, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
 streakLabel.AnchorPoint = Vector2.new(1, 0)
-streakLabel.Position = UDim2.new(1, -14, 0, 0)
-streakLabel.Size = UDim2.fromOffset(160, 34)
+streakLabel.Position = UDim2.new(1, -12, 0, 0)
+streakLabel.Size = UDim2.fromOffset(140, 34)
 streakLabel.TextXAlignment = Enum.TextXAlignment.Right
 
 -- Лента событий.
 local feed = Instance.new("Frame")
 feed.Name = "Feed"
-feed.AnchorPoint = Vector2.new(1, 0)
-feed.Position = UDim2.new(1, -18, 0, 90)
-feed.Size = UDim2.fromOffset(320, 220)
+feed.AnchorPoint = Vector2.new(0.5, 0)
+feed.Position = UDim2.new(0.5, 0, 0, 156)
+feed.Size = UDim2.fromOffset(392, 132)
 feed.BackgroundTransparency = 1
 feed.Parent = gui
 local feedLayout = Instance.new("UIListLayout")
 feedLayout.SortOrder = Enum.SortOrder.LayoutOrder
 feedLayout.Padding = UDim.new(0, 6)
-feedLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+feedLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 feedLayout.Parent = feed
 
 -- Монеты.
@@ -291,9 +294,14 @@ local function startTimer(duration: number, color: Color3)
 end
 
 local function pop(frame: GuiObject)
-	local target = frame.Size
-	frame.Size = UDim2.fromOffset(target.X.Offset * 0.9, target.Y.Offset * 0.9)
-	TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
+	local scale = frame:FindFirstChild("PopScale")
+	if not scale or not scale:IsA("UIScale") then
+		scale = Instance.new("UIScale")
+		scale.Name = "PopScale"
+		scale.Parent = frame
+	end
+	scale.Scale = 0.94
+	TweenService:Create(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
 local function showBanner(main: string, sub: string, color: Color3, seconds: number)
@@ -309,22 +317,35 @@ local function showBanner(main: string, sub: string, color: Color3, seconds: num
 	end)
 end
 
-local function setCard(shown: { string }, mode: string, round: number, excluded: string?)
+local function colorFrom(packed: { { number } }?, index: number, fallbackId: string): Color3
+	local item = packed and packed[index]
+	if typeof(item) == "table" and typeof(item[1]) == "number" then
+		return Color3.new(item[1], item[2], item[3])
+	end
+	return colorOf(fallbackId)
+end
+
+local function setCard(shown: { string }, mode: string, round: number, excluded: string?, colors: { { number } }?)
 	local primary = shown[1]
-	local color = colorOf(primary)
+	local color = colorFrom(colors, 1, primary)
+	swatch.Position = UDim2.fromOffset(10, 10)
+	swatch.Size = UDim2.fromOffset(80, 80)
 	swatch.BackgroundColor3 = color
 	swatchB.Visible = false
 	swatchMark.Text = ""
 	roundLabel.Text = "РАУНД " .. round
-	cardStroke.Color = color
 	if mode == "exclude" then
 		nameLabel.Text = "КРОМЕ: " .. nameOf(excluded or primary)
 		subLabel.Text = "Встань на ЛЮБОЙ другой цвет!"
 		swatchMark.Text = "✕"
 		swatchMark.TextColor3 = textOn(color)
-	elseif mode == "double" then
+	elseif mode == "double" and shown[2] then
+		swatch.Size = UDim2.fromOffset(38, 80)
 		swatchB.Visible = true
-		swatchB.BackgroundColor3 = colorOf(shown[2])
+		swatchB.AnchorPoint = Vector2.new(0, 0)
+		swatchB.Position = UDim2.fromOffset(52, 10)
+		swatchB.Size = UDim2.fromOffset(38, 80)
+		swatchB.BackgroundColor3 = colorFrom(colors, 2, shown[2])
 		nameLabel.Text = nameOf(shown[1]) .. " / " .. nameOf(shown[2])
 		subLabel.Text = "Подойдёт любой из двух цветов"
 	else
@@ -343,7 +364,7 @@ local function updateLives()
 		livesLabel.Text = ""
 		return
 	end
-	livesLabel.Text = if lives >= 2 then "♥ ♥" elseif lives == 1 then "♥ ♡" else "♡ ♡"
+	livesLabel.Text = if lives >= 2 then "♥   ♥" elseif lives == 1 then "♥   ♡" else "♡   ♡"
 end
 
 local function updateStreak()
@@ -369,36 +390,58 @@ end)
 player:GetAttributeChangedSignal("Streak"):Connect(updateStreak)
 player:GetAttributeChangedSignal("Shield"):Connect(function()
 	if player:GetAttribute("Shield") then
-		Effects.play("bonus")
-		showBanner("ЩИТ", "Одна ошибка прощается", Color3.fromRGB(112, 176, 255), 1.8)
+		Effects.flash(Color3.fromRGB(112, 176, 255), 0.25, 0.45)
 	end
 end)
 
 local function addFeed(text: string, kind: string)
 	local item = Instance.new("TextLabel")
-	item.BackgroundColor3 = PANEL
-	item.BackgroundTransparency = 0.3
+	item.BackgroundColor3 = Color3.fromRGB(22, 20, 34)
+	item.BackgroundTransparency = 0
 	item.BorderSizePixel = 0
-	item.Size = UDim2.fromOffset(320, 28)
-	item.AutomaticSize = Enum.AutomaticSize.None
-	item.Font = Enum.Font.GothamMedium
-	item.TextSize = 14
+	item.Size = UDim2.fromOffset(392, 36)
+	item.Font = Enum.Font.GothamBold
+	item.TextSize = 16
 	item.TextXAlignment = Enum.TextXAlignment.Left
-	item.TextTruncate = Enum.TextTruncate.AtEnd
-	item.Text = "  " .. text
+	item.TextYAlignment = Enum.TextYAlignment.Center
+	item.TextTruncate = Enum.TextTruncate.None
+	item.TextWrapped = true
+	item.Text = text
 	item.LayoutOrder = os.clock() * 1000
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
+	pad.Parent = item
 	local colors = {
 		info = MUTED,
 		fall = Color3.fromRGB(255, 190, 120),
-		out = Color3.fromRGB(255, 130, 140),
+		out = Color3.fromRGB(255, 150, 160),
 		warn = Color3.fromRGB(255, 214, 120),
-		bonus = Color3.fromRGB(150, 220, 255),
+		bonus = Color3.fromRGB(190, 230, 255),
 		win = Color3.fromRGB(255, 214, 120),
 	}
-	item.TextColor3 = colors[kind] or MUTED
+	item.TextColor3 = WHITE
 	item.Parent = feed
-	corner(item, 8)
-	while #feed:GetChildren() > 8 do
+	corner(item, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Color = colors[kind] or WHITE
+	stroke.Transparency = 0.15
+	stroke.Parent = item
+	if kind == "bonus" then
+		local dash = string.find(text, "РЫВОК", 1, true) ~= nil or string.find(text, "ускор", 1, true) ~= nil
+		local title = if dash then "РЫВОК" else "ЩИТ"
+		local tone = if dash then Color3.fromRGB(255, 150, 60) else Color3.fromRGB(112, 176, 255)
+		Effects.play("bonus", if dash then 1.18 else 1)
+		showBanner(title, text, tone, 2.4)
+	end
+	local labels = 0
+	for _, child in feed:GetChildren() do
+		if child:IsA("TextLabel") then
+			labels += 1
+		end
+	end
+	while labels > 3 do
 		local oldest
 		for _, child in feed:GetChildren() do
 			if child:IsA("TextLabel") and (not oldest or child.LayoutOrder < oldest.LayoutOrder) then
@@ -407,6 +450,7 @@ local function addFeed(text: string, kind: string)
 		end
 		if oldest then
 			oldest:Destroy()
+			labels -= 1
 		else
 			break
 		end
@@ -469,9 +513,12 @@ local function showResults(data: { [string]: any })
 	end
 end
 
+local knockedOut = false
+
 Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 	local phase = data.phase
 	if phase == "prepare" then
+		knockedOut = false
 		hideAll()
 		SpectatorCam.stop(true)
 		updateLives()
@@ -480,11 +527,14 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 		status.Visible = true
 		aliveLabel.Text = "Игроков " .. tostring(data.total)
 	elseif phase == "show" then
+		if knockedOut then
+			return
+		end
 		banner.Visible = false
 		results.Visible = false
-		setCard(data.shown, data.mode, data.round, data.excluded)
+		setCard(data.shown, data.mode, data.round, data.excluded, data.colors)
 		aliveLabel.Text = "Осталось " .. tostring(data.alive) .. " / " .. tostring(data.total)
-		startTimer(data.time, colorOf(data.shown[1]))
+		startTimer(data.time, colorFrom(data.colors, 1, data.shown[1]))
 		Effects.play("go")
 		if data.mode == "exclude" then
 			showBanner("ЛЮБОЙ, КРОМЕ " .. nameOf(data.excluded), "Не стой на этом цвете!", colorOf(data.excluded), 1.6)
@@ -492,8 +542,11 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 			showBanner("ДВА ЦВЕТА", "Подойдёт любой из двух", WHITE, 1.4)
 		end
 	elseif phase == "fake" then
+		if knockedOut then
+			return
+		end
 		local id = data.shown[1]
-		setCard(data.shown, "normal", tonumber(string.match(roundLabel.Text, "%d+")) or 0)
+		setCard(data.shown, "normal", tonumber(string.match(roundLabel.Text, "%d+")) or 0, nil, data.colors)
 		subLabel.Text = "СМЕНА ЦВЕТА!"
 		subLabel.TextColor3 = Color3.fromRGB(255, 110, 110)
 		startTimer(data.time, colorOf(id))
@@ -505,25 +558,28 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 			subLabel.TextColor3 = MUTED
 		end)
 	elseif phase == "drop" then
+		if knockedOut then
+			return
+		end
 		stopTimer()
 		bar.Size = UDim2.fromScale(0, 1)
 		timeLabel.Text = "0.0"
 		subLabel.Text = "Плиты падают…"
 		Effects.play("drop")
 	elseif phase == "eliminated" then
+		knockedOut = true
 		hideAll()
 		Effects.play("out")
 		Effects.flash(Color3.fromRGB(255, 80, 90), 0.45, 0.8)
 		showBanner("ТЫ ВЫБЫЛ", "Место: " .. tostring(data.place) .. "  ·  смотри матч до конца или нажми X", Color3.fromRGB(255, 130, 140), 4)
-		if typeof(data.center) == "Vector3" then
-			SpectatorCam.start(data.center, "ТЫ ВЫБЫЛ  ·  АРЕНА " .. (data.slot + 1) .. "  ·  раунд " .. tostring(data.round))
-		end
+		Remotes.get("Spectate"):FireServer("start")
 	elseif phase == "results" then
 		stopTimer()
 		card.Visible = false
 		banner.Visible = false
 		showResults(data)
 	elseif phase == "end" then
+		knockedOut = false
 		hideAll()
 		SpectatorCam.stop(true)
 		for _, child in feed:GetChildren() do
@@ -544,7 +600,7 @@ end)
 Remotes.get("Economy").OnClientEvent:Connect(function(data)
 	coinsLabel.Text = tostring(data.coins)
 	if data.delta and data.delta > 0 and data.reason ~= "load" then
-		Effects.play("coin", 1 + math.random() * 0.2)
+		Effects.play("coin", 1.05 + math.random() * 0.08)
 		local popLabel = label(gui, "Delta", "+" .. tostring(data.delta), 20, Enum.Font.GothamBlack, Color3.fromRGB(255, 206, 84))
 		popLabel.AnchorPoint = Vector2.new(0, 1)
 		popLabel.Position = UDim2.new(0, 220, 1, -30)
@@ -562,6 +618,15 @@ end)
 
 Remotes.get("Reaction").OnClientEvent:Connect(function(name, text)
 	addFeed(name .. ": " .. text, "info")
+end)
+
+player:GetAttributeChangedSignal("InMatch"):Connect(function()
+	if player:GetAttribute("InMatch") == nil then
+		knockedOut = true
+		stopTimer()
+		card.Visible = false
+		status.Visible = false
+	end
 end)
 
 updateLives()

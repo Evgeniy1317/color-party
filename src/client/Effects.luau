@@ -16,7 +16,7 @@ local SOUNDS = {
 	out = { id = "rbxasset://sounds/uuhhh.mp3", volume = 0.6 },
 	win = { id = "rbxasset://sounds/victory.wav", volume = 0.7 },
 	click = { id = "rbxasset://sounds/button.wav", volume = 0.5 },
-	coin = { id = "rbxasset://sounds/snap.mp3", volume = 0.5 },
+	coin = { id = "rbxassetid://130201387574815", volume = 0.75 },
 	bonus = { id = "rbxasset://sounds/action_get_up.mp3", volume = 0.6 },
 	fall = { id = "rbxasset://sounds/action_falling.mp3", volume = 0.5 },
 }

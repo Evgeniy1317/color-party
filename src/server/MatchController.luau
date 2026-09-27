@@ -49,6 +49,7 @@ export type MatchController = typeof(setmetatable({} :: {
 	onFinished: ((MatchController) -> ())?,
 	roundStartAlive: { Participant },
 	palette: { string },
+	dropGen: number,
 }, MatchController))
 
 -- Создание ---------------------------------------------------------------
@@ -70,6 +71,7 @@ function MatchController.new(arena: Folder, onFinished: ((MatchController) -> ()
 	self.onFinished = onFinished
 	self.roundStartAlive = {}
 	self.palette = {}
+	self.dropGen = 0
 	return self
 end
 
@@ -139,33 +141,31 @@ function MatchController:setBeacons(color: Color3)
 	end
 end
 
-local function readable(on: Color3): Color3
-	local _, _, v = on:ToHSV()
-	local luminance = 0.2126 * on.R + 0.7152 * on.G + 0.0722 * on.B
-	return if luminance > 0.62 or v > 0.9 and luminance > 0.5 then Color3.fromRGB(40, 38, 54) else Color3.fromRGB(255, 255, 255)
-end
-
 function MatchController:setScreen(main: string, sub: string, fill: Color3)
 	local screen = self.arena:FindFirstChild("Screen")
 	if not screen then
 		return
 	end
-	local textColor = readable(fill)
 	for _, gui in screen:GetChildren() do
 		if gui:IsA("SurfaceGui") then
 			local frame = gui:FindFirstChild("Fill")
 			if frame and frame:IsA("Frame") then
 				TweenService:Create(frame, TweenInfo.new(0.3), { BackgroundColor3 = fill }):Play()
-				for _, name in { "Title", "Main", "Sub" } do
-					local label = frame:FindFirstChild(name)
-					if label and label:IsA("TextLabel") then
-						label.TextColor3 = textColor
-						if name == "Main" then
-							label.Text = main
-						elseif name == "Sub" then
-							label.Text = sub
-						end
-					end
+				local panel = frame:FindFirstChild("Panel")
+				local host = if panel and panel:IsA("Frame") then panel else frame
+				local chip = host:FindFirstChild("Chip")
+				if chip and chip:IsA("Frame") then
+					chip.BackgroundColor3 = fill
+				end
+				local mainLabel = host:FindFirstChild("Main")
+				if mainLabel and mainLabel:IsA("TextLabel") then
+					mainLabel.Text = main
+					mainLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				end
+				local subLabel = host:FindFirstChild("Sub")
+				if subLabel and subLabel:IsA("TextLabel") then
+					subLabel.Text = sub
+					subLabel.TextColor3 = Color3.fromRGB(220, 224, 240)
 				end
 			end
 		end
@@ -202,33 +202,98 @@ function MatchController:idleLook()
 	self:setScreen("ОЖИДАНИЕ ИГРОКОВ", "Нажми ГОТОВ в лобби, чтобы сыграть", Color3.fromRGB(44, 42, 58))
 end
 
--- Плиты: падение и восстановление -----------------------------------------
+-- Плиты нужного цвета остаются на обоих этажах. Остальные пропадают.
+function MatchController:dropTiles(rule: RoundRules.Rule, protected: { [BasePart]: boolean })
+	local function stays(tile: BasePart): boolean
+		if protected[tile] then
+			return true
+		end
+		local id = tile:GetAttribute("ColorId")
+		if RoundRules.isSafe(rule, if typeof(id) == "string" then id else nil, false) then
+			return true
+		end
+		for _, targetId in rule.targets do
+			local def = Config.COLOR_BY_ID[targetId]
+			if def then
+				local color = tile.Color
+				if math.abs(color.R - def.color.R) < 0.004
+					and math.abs(color.G - def.color.G) < 0.004
+					and math.abs(color.B - def.color.B) < 0.004
+				then
+					tile:SetAttribute("ColorId", targetId)
+					return true
+				end
+			end
+		end
+		return false
+	end
 
--- Верхний этаж: падают все «неправильные» плиты. Нижний этаж: только плиты
--- под игроками, которые стоят не там — иначе упавшие сверху пролетели бы сквозь
--- нижний этаж и потеряли бы вторую жизнь.
-function MatchController:dropTiles(rule: RoundRules.Rule, protected: { [BasePart]: boolean }, lowerDrop: { [BasePart]: boolean })
-	local function fall(tile: BasePart)
+	local tiles = self:tiles()
+	local staying: { [BasePart]: boolean } = {}
+	local falling: { BasePart } = {}
+	for _, tile in tiles do
+		if stays(tile) then
+			staying[tile] = true
+		else
+			table.insert(falling, tile)
+		end
+	end
+	if next(staying) == nil then
+		warn("[ColorParty] no safe tiles this round, floor stays")
+		return
+	end
+
+	for tile in staying do
+		tile.CanCollide = true
+		tile.Transparency = 0
+	end
+	for _, tile in falling do
 		tile.CanCollide = false
-		TweenService:Create(tile, TweenInfo.new(0.3), { Transparency = 0.8 }):Play()
-	end
-	for _, tile in TileLayout.tiles(self.arena:WaitForChild("Upper")) do
-		local safe = RoundRules.isSafe(rule, tile:GetAttribute("ColorId") :: string, tile:GetAttribute("Hub") == true)
-		if not safe and not protected[tile] then
-			fall(tile)
+		if typeof(tile:GetAttribute("HomeCF")) ~= "CFrame" then
+			tile:SetAttribute("HomeCF", tile.CFrame)
 		end
 	end
-	for tile in lowerDrop do
-		if not protected[tile] then
-			fall(tile)
+
+	-- Падение задаётся прямым свойством, без TweenService: массовый твин
+	-- прозрачности на клиенте гасил и те плиты, которые должны остаться.
+	self.dropGen += 1
+	local gen = self.dropGen
+	task.spawn(function()
+		local steps = 8
+		for step = 1, steps do
+			if self.dropGen ~= gen then
+				return
+			end
+			local alpha = step / steps
+			for _, tile in falling do
+				if tile.Parent then
+					local home = tile:GetAttribute("HomeCF")
+					if typeof(home) == "CFrame" then
+						tile.CFrame = home * CFrame.new(0, -18 * alpha, 0)
+					end
+					tile.Transparency = alpha
+				end
+			end
+			for tile in staying do
+				if tile.Parent then
+					tile.Transparency = 0
+					tile.CanCollide = true
+				end
+			end
+			task.wait(0.04)
 		end
-	end
+	end)
 end
 
 function MatchController:restoreTiles()
+	self.dropGen += 1
 	for _, tile in self:tiles() do
+		local home = tile:GetAttribute("HomeCF")
+		if typeof(home) == "CFrame" then
+			tile.CFrame = home
+		end
 		tile.CanCollide = true
-		TweenService:Create(tile, TweenInfo.new(0.3), { Transparency = 0 }):Play()
+		tile.Transparency = 0
 	end
 end
 
@@ -249,7 +314,7 @@ function MatchController:shrink(count: number)
 		local quota = if floorName == "Upper" then count else math.ceil(count / 2)
 		for i = 1, math.min(quota, #list - 6) do
 			local tile = list[i]
-			if tile:GetAttribute("Hub") then
+			if tile:GetAttribute("Hub") or (tile:GetAttribute("Dist") :: number) < 0 then
 				continue
 			end
 			tile.CanCollide = false
@@ -329,6 +394,53 @@ function MatchController:randomUpperTiles(count: number): { BasePart }
 	return chosen
 end
 
+local function pickupLabel(part: BasePart, text: string, color: Color3)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Tag"
+	gui.Size = UDim2.fromOffset(90, 36)
+	gui.StudsOffset = Vector3.new(0, 2.4, 0)
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 220
+	gui.Parent = part
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBlack
+	label.TextSize = 22
+	label.Text = text
+	label.TextColor3 = color
+	label.TextStrokeColor3 = Color3.fromRGB(20, 16, 28)
+	label.TextStrokeTransparency = 0.25
+	label.Parent = gui
+end
+
+function MatchController:takePickup(item: BasePart, p: Participant)
+	if item:GetAttribute("Taken") or not p.alive then
+		return
+	end
+	item:SetAttribute("Taken", true)
+	local kind = item:GetAttribute("Pickup")
+	if kind == "Coin" then
+		Economy.addCoins(p.player, Config.COIN_VALUE, "coin")
+	elseif kind == "Shield" then
+		p.shield = true
+		p.player:SetAttribute("Shield", true)
+		self:feed(p.player.DisplayName .. " взял щит", "bonus")
+	elseif kind == "Dash" then
+		local humanoid = p.player.Character and p.player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.WalkSpeed = 27
+			task.delay(3.5, function()
+				if humanoid.Parent then
+					humanoid.WalkSpeed = 16
+				end
+			end)
+		end
+		self:feed(p.player.DisplayName .. " ускорился", "bonus")
+	end
+	item:Destroy()
+end
+
 function MatchController:spawnCoins()
 	local folder = self:pickupFolder()
 	local count = self.rng:NextInteger(Config.COINS_ON_FIELD[1], Config.COINS_ON_FIELD[2])
@@ -336,28 +448,18 @@ function MatchController:spawnCoins()
 		local coin = Instance.new("Part")
 		coin.Name = "Coin"
 		coin.Shape = Enum.PartType.Cylinder
-		coin.Size = Vector3.new(0.5, 2.6, 2.6)
+		coin.Size = Vector3.new(0.45, 3.6, 3.6)
 		coin.Color = GOLD
 		coin.Material = Enum.Material.SmoothPlastic
 		coin.Anchored = true
 		coin.CanCollide = false
-		coin.CFrame = CFrame.new(tile.Position + Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, self.rng:NextNumber() * math.pi, 0)
-		coin:SetAttribute("Spin", 140)
+		coin.CanTouch = true
+		coin.CFrame = CFrame.new(tile.Position + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		coin:SetAttribute("Spin", 160)
+		coin:SetAttribute("Pickup", "Coin")
 		sparkle(coin, GOLD)
+		pickupLabel(coin, "МОНЕТА", GOLD)
 		coin.Parent = folder
-		local taken = false
-		coin.Touched:Connect(function(hit)
-			if taken then
-				return
-			end
-			local player = Players:GetPlayerFromCharacter(hit.Parent)
-			local p = player and self:participantOf(player)
-			if p and p.alive then
-				taken = true
-				Economy.addCoins(player :: Player, Config.COIN_VALUE, "coin")
-				coin:Destroy()
-			end
-		end)
 	end
 end
 
@@ -371,48 +473,23 @@ function MatchController:spawnBonus()
 	end
 	local kind = if self.rng:NextNumber() < 0.5 then "Shield" else "Dash"
 	local color = if kind == "Shield" then Color3.fromRGB(112, 176, 255) else Color3.fromRGB(255, 150, 60)
+	local title = if kind == "Shield" then "ЩИТ" else "РЫВОК"
 	local orb = Instance.new("Part")
 	orb.Name = kind
 	orb.Shape = Enum.PartType.Ball
-	orb.Size = Vector3.new(2.6, 2.6, 2.6)
+	orb.Size = Vector3.new(3.4, 3.4, 3.4)
 	orb.Color = color
-	orb.Material = Enum.Material.Neon
+	orb.Material = Enum.Material.SmoothPlastic
 	orb.Anchored = true
 	orb.CanCollide = false
-	orb.CFrame = CFrame.new(tiles[1].Position + Vector3.new(0, 3, 0))
+	orb.CanTouch = true
+	orb.CFrame = CFrame.new(tiles[1].Position + Vector3.new(0, 4, 0))
 	orb:SetAttribute("Bob", 2.2)
+	orb:SetAttribute("Pickup", kind)
 	sparkle(orb, color)
+	pickupLabel(orb, title, color)
 	orb.Parent = self:pickupFolder()
 	self:feed(if kind == "Shield" then "На поле появился ЩИТ!" else "На поле появился РЫВОК!", "bonus")
-	local taken = false
-	orb.Touched:Connect(function(hit)
-		if taken then
-			return
-		end
-		local player = Players:GetPlayerFromCharacter(hit.Parent)
-		local p = player and self:participantOf(player)
-		if not p or not p.alive then
-			return
-		end
-		taken = true
-		orb:Destroy()
-		if kind == "Shield" then
-			p.shield = true
-			p.player:SetAttribute("Shield", true)
-			self:feed(p.player.DisplayName .. " взял щит", "bonus")
-		else
-			local humanoid = hit.Parent:FindFirstChildOfClass("Humanoid")
-			if humanoid then
-				humanoid.WalkSpeed = 27
-				task.delay(3.5, function()
-					if humanoid.Parent then
-						humanoid.WalkSpeed = 16
-					end
-				end)
-			end
-			self:feed(p.player.DisplayName .. " ускорился", "bonus")
-		end
-	end)
 end
 
 -- Игроки -------------------------------------------------------------------
@@ -482,8 +559,20 @@ function MatchController:watch()
 			if not root or not root:IsA("BasePart") then
 				continue
 			end
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			if not humanoid or humanoid.Health <= 0 then
+				self:eliminate(p, "died")
+				continue
+			end
 			local y = root.Position.Y
-			if p.floor == "upper" and y < self.upperY - 14 then
+			local dx = math.abs(root.Position.X - self.center.X)
+			local dz = math.abs(root.Position.Z - self.center.Z)
+			-- Респавн в лобби или вылет за квадрат: матч для этого игрока закончен.
+			if dx > A.LOWER_RADIUS + 36 or dz > A.LOWER_RADIUS + 36 then
+				self:eliminate(p, "fell")
+				continue
+			end
+			if p.floor == "upper" and y < (self.upperY + self.lowerY) / 2 then
 				p.floor = "lower"
 				p.lives = 1
 				p.streak = 0
@@ -493,6 +582,15 @@ function MatchController:watch()
 			end
 			if y < self.lowerY - A.FALL_LIMIT then
 				self:eliminate(p, "fell")
+				continue
+			end
+			local pickups = self.arena:FindFirstChild("Pickups")
+			if pickups then
+				for _, item in pickups:GetChildren() do
+					if item:IsA("BasePart") and not item:GetAttribute("Taken") and (item.Position - root.Position).Magnitude <= 7 then
+						self:takePickup(item, p)
+					end
+				end
 			end
 		end
 	end))
@@ -538,6 +636,20 @@ function MatchController:teleportIn()
 		p.player:SetAttribute("Streak", 0)
 		p.player:SetAttribute("Shield", nil)
 		self:hookCharacter(p)
+		-- Смерть и респавн не возвращают в матч: новый персонаж — это уже вылет.
+		table.insert(self.connections, p.player.CharacterAdded:Connect(function()
+			if self.state ~= "running" and self.state ~= "results" then
+				return
+			end
+			if p.alive then
+				self:eliminate(p, "died")
+			end
+			task.defer(function()
+				if p.player.Parent then
+					toLobby(p.player)
+				end
+			end)
+		end))
 	end
 end
 
@@ -603,6 +715,74 @@ local function nameOf(id: string): string
 	return if def then def.name else id
 end
 
+local function packColor(id: string): { number }
+	local color = colorOf(id)
+	return { color.R, color.G, color.B }
+end
+
+local function packShown(ids: { string }): { { number } }
+	local packed = {}
+	for _, id in ids do
+		table.insert(packed, packColor(id))
+	end
+	return packed
+end
+
+function MatchController:paintRound(rule: RoundRules.Rule)
+	self.dropGen += 1
+	local hidden = self:tiles()
+	for _, tile in hidden do
+		tile.Transparency = 1
+	end
+	local plan = { rng = self.rng, assign = rule.assign, fillers = rule.fillers, hubId = rule.hubId }
+	for _, floorName in { "Upper", "Lower" } do
+		local folder = self.arena:FindFirstChild(floorName)
+		if not folder then
+			continue
+		end
+		local tiles = TileLayout.tiles(folder)
+		TileLayout.recolor(tiles, plan)
+		if rule.mode == "exclude" then
+			continue
+		end
+		local safe = 0
+		for _, tile in tiles do
+			local id = tile:GetAttribute("ColorId")
+			if RoundRules.isSafe(rule, if typeof(id) == "string" then id else nil, false) then
+				safe += 1
+			end
+		end
+		local need = math.max(8, math.floor(#tiles * 0.35))
+		local id = rule.targets[1]
+		local def = id and Config.COLOR_BY_ID[id]
+		if def then
+			for _, tile in tiles do
+				if safe >= need then
+					break
+				end
+				local current = tile:GetAttribute("ColorId")
+				if not RoundRules.isSafe(rule, if typeof(current) == "string" then current else nil, false) then
+					tile.Color = def.color
+					tile:SetAttribute("ColorId", id)
+					tile:SetAttribute("Hub", false)
+					safe += 1
+				end
+			end
+		end
+	end
+	RunService.Heartbeat:Wait()
+	for _, tile in hidden do
+		if tile.Parent then
+			local home = tile:GetAttribute("HomeCF")
+			if typeof(home) == "CFrame" then
+				tile.CFrame = home
+			end
+			tile.CanCollide = true
+			tile.Transparency = 0
+		end
+	end
+end
+
 function MatchController:run()
 	self:rebuildTiles()
 	TileLayout.idle(self:tiles(), self.rng)
@@ -623,8 +803,7 @@ function MatchController:run()
 		lastTarget = rule.targets[1]
 
 		-- Раскраска поля и подсказки.
-		TileLayout.recolor(self:tiles(), { rng = self.rng, assign = rule.assign, fillers = rule.fillers, hubId = rule.hubId })
-		self:restoreTiles()
+		self:paintRound(rule)
 		local shownId = rule.shown[1]
 		if rule.mode == "exclude" then
 			self:setScreen("КРОМЕ: " .. nameOf(shownId), "Раунд " .. self.round .. " · встань на ЛЮБОЙ другой цвет", colorOf(shownId))
@@ -644,6 +823,7 @@ function MatchController:run()
 			time = rule.time,
 			mode = rule.mode,
 			shown = rule.shown,
+			colors = packShown(rule.shown),
 			excluded = rule.excluded,
 			alive = info.alive,
 			total = info.total,
@@ -654,40 +834,35 @@ function MatchController:run()
 			task.wait(math.max(0.2, rule.time - Config.FAKE_BEFORE_END))
 			self:setScreen(nameOf(rule.fakeTo), "СМЕНА ЦВЕТА!", colorOf(rule.fakeTo))
 			self:setBeacons(colorOf(rule.fakeTo))
-			self:send({ phase = "fake", shown = { rule.fakeTo }, time = Config.FAKE_BEFORE_END })
+			self:send({ phase = "fake", shown = { rule.fakeTo }, colors = { packColor(rule.fakeTo) }, time = Config.FAKE_BEFORE_END })
 			task.wait(Config.FAKE_BEFORE_END)
 		else
 			task.wait(rule.time)
 		end
 
-		-- Дедлайн: смотрим, на чём стоит каждый. Щит защищает плиту под игроком;
-		-- на нижнем этаже падают только плиты под теми, кто стоит не там.
+		-- Остаются только плиты цветов из задания. Щит сохраняет одну плиту под ногами.
 		local protected: { [BasePart]: boolean } = {}
-		local lowerDrop: { [BasePart]: boolean } = {}
 		local params = RaycastParams.new()
 		params.FilterType = Enum.RaycastFilterType.Include
 		params.FilterDescendantsInstances = { self.arena:WaitForChild("Upper"), self.arena:WaitForChild("Lower") }
 		for _, p in self:aliveList() do
+			if not p.shield then
+				continue
+			end
 			local root = p.player.Character and p.player.Character:FindFirstChild("HumanoidRootPart")
 			if not root or not root:IsA("BasePart") then
 				continue
 			end
-			local hit = workspace:Raycast(root.Position, Vector3.new(0, -12, 0), params)
-			if not hit or not hit.Instance then
-				continue
-			end
-			local tile = hit.Instance :: BasePart
-			local safe = RoundRules.isSafe(rule, tile:GetAttribute("ColorId") :: string, tile:GetAttribute("Hub") == true)
-			if safe then
-				continue
-			end
-			if p.shield then
-				protected[tile] = true
-				p.shield = false
-				p.player:SetAttribute("Shield", nil)
-				self:feed("Щит спас " .. p.player.DisplayName .. "!", "bonus")
-			elseif p.floor == "lower" then
-				lowerDrop[tile] = true
+			local hit = workspace:Raycast(root.Position, Vector3.new(0, -25, 0), params)
+			local tile = hit and hit.Instance
+			if tile and tile:IsA("BasePart") then
+				local id = tile:GetAttribute("ColorId")
+				if not RoundRules.isSafe(rule, if typeof(id) == "string" then id else nil, false) then
+					protected[tile] = true
+					p.shield = false
+					p.player:SetAttribute("Shield", nil)
+					self:feed("Щит спас " .. p.player.DisplayName .. "!", "bonus")
+				end
 			end
 		end
 
@@ -696,7 +871,7 @@ function MatchController:run()
 			before[p] = p.floor
 		end
 		self:clearPickups()
-		self:dropTiles(rule, protected, lowerDrop)
+		self:dropTiles(rule, protected)
 		self:send({ phase = "drop", round = self.round })
 		task.wait(Config.DROP_TIME)
 
@@ -709,10 +884,6 @@ function MatchController:run()
 				Economy.addCoins(p.player, Config.ECONOMY.ROUND_SURVIVED * Economy.streakMultiplier(p.streak - 1), "round")
 			end
 		end
-
-		self:restoreTiles()
-		self:shrink(RoundRules.shrinkCount(self.round, self.rng))
-		task.wait(0.5)
 	end
 end
 
@@ -805,6 +976,7 @@ function MatchController:finish()
 	self.participants = {}
 	self.spectators = {}
 	self.round = 0
+	self:restoreTiles()
 	self:idleLook()
 	self.state = "idle"
 	if self.onFinished then

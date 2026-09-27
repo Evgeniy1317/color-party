@@ -16,6 +16,7 @@ local queue: { Player } = {}
 local autoReady: { [Player]: boolean } = {}
 local timerEnd: number? = nil
 local consoleLabels: { [string]: TextLabel } = {}
+local spectatorIndex: { [Player]: number } = {}
 
 local function inQueue(player: Player): number?
 	return table.find(queue, player)
@@ -58,21 +59,15 @@ local function broadcast()
 		queued = queue,
 	})
 	if consoleLabels.Queue then
-		consoleLabels.Queue.Text = "В очереди: " .. #queue .. " / " .. Config.MAX_PLAYERS_PER_MATCH
+		consoleLabels.Queue.Text = "Готовы к матчу    " .. #queue .. " / " .. Config.MAX_PLAYERS_PER_MATCH
 	end
-	if consoleLabels.Status then
-		local text
-		if waitingArena then
-			text = "Все арены заняты — ждём свободную"
-		elseif #active > 0 then
-			text = "Идёт матчей: " .. #active .. " из " .. #controllers
-		else
-			text = "Арены свободны"
+	for _, controller in controllers do
+		local label = consoleLabels["C" .. (controller.slot + 1)]
+		if label then
+			local playing = if controller:isActive() then controller:info().alive else 0
+			label.Text = if playing > 0 then tostring(playing) else "—"
+			label.TextColor3 = if playing > 0 then Color3.fromRGB(255, 214, 120) else Color3.fromRGB(150, 156, 178)
 		end
-		if timeLeft and #queue > 0 then
-			text ..= "  ·  старт через " .. math.ceil(timeLeft) .. " с"
-		end
-		consoleLabels.Status.Text = text
 	end
 end
 
@@ -154,17 +149,58 @@ local function onMatchFinished(_controller: MatchController.MatchController)
 	broadcast()
 end
 
-function Matchmaker.randomActiveSlot(): MatchController.MatchController?
-	local active = {}
+export type SpectateEntry = { slot: number, center: Vector3, active: boolean }
+
+function Matchmaker.allArenas(): { SpectateEntry }
+	local list: { SpectateEntry } = {}
 	for _, controller in controllers do
-		if controller:isActive() then
-			table.insert(active, controller)
+		table.insert(list, {
+			slot = controller.slot,
+			center = controller.center,
+			active = controller:isActive(),
+		})
+	end
+	table.sort(list, function(a, b)
+		return a.slot < b.slot
+	end)
+	return list
+end
+
+-- action: "start" | "next" | "prev" — листаем все арены (1…6), в т.ч. пустые.
+function Matchmaker.spectate(player: Player, action: string?)
+	local list = Matchmaker.allArenas()
+	local remote = Remotes.get("Spectate")
+	if #list == 0 then
+		spectatorIndex[player] = nil
+		remote:FireClient(player, { ok = false, message = "Арены не найдены" })
+		return
+	end
+	local idx = spectatorIndex[player] or 0
+	if action == "next" then
+		idx = (idx % #list) + 1
+	elseif action == "prev" then
+		idx = idx - 1
+		if idx < 1 then
+			idx = #list
 		end
+	else
+		idx = 1
 	end
-	if #active == 0 then
-		return controllers[1]
-	end
-	return active[math.random(1, #active)]
+	idx = math.clamp(idx, 1, #list)
+	spectatorIndex[player] = idx
+	local entry = list[idx]
+	remote:FireClient(player, {
+		ok = true,
+		slot = entry.slot,
+		center = entry.center,
+		active = entry.active,
+		index = idx,
+		total = #list,
+	})
+end
+
+function Matchmaker.clearSpectator(player: Player)
+	spectatorIndex[player] = nil
 end
 
 function Matchmaker.controller(slot: number): MatchController.MatchController?
@@ -190,10 +226,9 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 	end
 
 	if console then
-		local screen = console:FindFirstChild("Screen")
-		local gui = screen and screen:FindFirstChildOfClass("SurfaceGui")
-		if gui then
-			for _, label in gui:GetDescendants() do
+		local screen = console:FindFirstChild("MatchSign", true)
+		if screen then
+			for _, label in screen:GetDescendants() do
 				if label:IsA("TextLabel") then
 					consoleLabels[label.Name] = label
 				end
@@ -215,6 +250,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 			table.remove(queue, index)
 		end
 		autoReady[player] = nil
+		spectatorIndex[player] = nil
 		broadcast()
 	end)
 

@@ -68,7 +68,7 @@ local function part(props: {
 	return p
 end
 
-local function ring(parent: Instance, name: string, center: Vector3, radius: number, y: number, height: number, thickness: number, color: Color3, material: Enum.Material, segs: number, transparency: number?)
+local function ring(parent: Instance, name: string, center: Vector3, radius: number, y: number, height: number, thickness: number, color: Color3, material: Enum.Material, segs: number, transparency: number?, collide: boolean?)
 	for index = 0, segs - 1 do
 		local a0 = (index / segs) * math.pi * 2
 		local a1 = ((index + 1) / segs) * math.pi * 2
@@ -76,16 +76,48 @@ local function ring(parent: Instance, name: string, center: Vector3, radius: num
 		local chord = 2 * radius * math.sin((a1 - a0) / 2)
 		local position = Vector3.new(center.X + math.cos(mid) * radius, y, center.Z + math.sin(mid) * radius)
 		local tangent = Vector3.new(-math.sin(mid), 0, math.cos(mid))
-		part({
+		local wall = part({
 			Name = name,
-			Size = Vector3.new(thickness, height, chord + 0.6),
+			Size = Vector3.new(thickness, height, chord + 1.8),
 			CFrame = CFrame.lookAt(position, position + tangent),
 			Color = color,
 			Material = material,
 			Transparency = transparency,
-			CanCollide = false,
+			CanCollide = collide == true,
 			Parent = parent,
 		})
+		if collide then
+			wall.CanQuery = false
+			wall.CastShadow = false
+		end
+	end
+end
+
+-- Четыре стены по сторонам квадрата. `half` — расстояние от центра до внутренней грани.
+local function squareFrame(parent: Instance, name: string, center: Vector3, half: number, y: number, height: number, thickness: number, color: Color3, material: Enum.Material, transparency: number?, collide: boolean?)
+	local reach = half + thickness / 2
+	local length = reach * 2 + thickness
+	local specs = {
+		{ Vector3.new(length, height, thickness), Vector3.new(0, 0, reach) },
+		{ Vector3.new(length, height, thickness), Vector3.new(0, 0, -reach) },
+		{ Vector3.new(thickness, height, length), Vector3.new(reach, 0, 0) },
+		{ Vector3.new(thickness, height, length), Vector3.new(-reach, 0, 0) },
+	}
+	for _, spec in specs do
+		local wall = part({
+			Name = name,
+			Size = spec[1],
+			CFrame = CFrame.new(center.X + spec[2].X, y, center.Z + spec[2].Z),
+			Color = color,
+			Material = material,
+			Transparency = transparency,
+			CanCollide = collide == true,
+			Parent = parent,
+		})
+		if collide then
+			wall.CanQuery = false
+			wall.CastShadow = false
+		end
 	end
 end
 
@@ -123,18 +155,41 @@ local function screenFace(screen: Part, face: Enum.NormalId, slot: number)
 	fill.BorderSizePixel = 0
 	fill.Parent = gui
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.08, 0)
+	corner.CornerRadius = UDim.new(0.06, 0)
 	corner.Parent = fill
 
-	label(fill, "Title", UDim2.fromScale(0.03, 0.04), UDim2.fromScale(0.94, 0.18), "COLOR PARTY  ·  АРЕНА " .. (slot + 1), 34, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
-	local main = label(fill, "Main", UDim2.fromScale(0.03, 0.24), UDim2.fromScale(0.94, 0.46), "ОЖИДАНИЕ ИГРОКОВ", 92, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
+	-- Тёмная плашка внутри цветной рамки: текст читается на любом цвете.
+	local panel = Instance.new("Frame")
+	panel.Name = "Panel"
+	panel.Position = UDim2.fromScale(0.035, 0.1)
+	panel.Size = UDim2.fromScale(0.93, 0.8)
+	panel.BackgroundColor3 = Color3.fromRGB(28, 26, 40)
+	panel.BorderSizePixel = 0
+	panel.Parent = fill
+	local panelCorner = Instance.new("UICorner")
+	panelCorner.CornerRadius = UDim.new(0.08, 0)
+	panelCorner.Parent = panel
+
+	local chip = Instance.new("Frame")
+	chip.Name = "Chip"
+	chip.Position = UDim2.fromScale(0.04, 0.22)
+	chip.Size = UDim2.fromScale(0.16, 0.62)
+	chip.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	chip.BorderSizePixel = 0
+	chip.Parent = panel
+	local chipCorner = Instance.new("UICorner")
+	chipCorner.CornerRadius = UDim.new(0.18, 0)
+	chipCorner.Parent = chip
+	local chipStroke = Instance.new("UIStroke")
+	chipStroke.Thickness = 3
+	chipStroke.Color = Color3.fromRGB(255, 255, 255)
+	chipStroke.Parent = chip
+
+	label(panel, "Title", UDim2.fromScale(0.24, 0.06), UDim2.fromScale(0.72, 0.2), "COLOR PARTY  ·  АРЕНА " .. (slot + 1), 28, Color3.fromRGB(255, 214, 120), Enum.Font.GothamBold)
+	local main = label(panel, "Main", UDim2.fromScale(0.24, 0.28), UDim2.fromScale(0.72, 0.4), "ОЖИДАНИЕ ИГРОКОВ", 64, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
 	main.TextScaled = true
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 3
-	stroke.Color = Color3.fromRGB(30, 28, 40)
-	stroke.Transparency = 0.35
-	stroke.Parent = main
-	label(fill, "Sub", UDim2.fromScale(0.03, 0.72), UDim2.fromScale(0.94, 0.22), "Нажми ГОТОВ в лобби, чтобы сыграть", 36, Color3.fromRGB(240, 240, 248), Enum.Font.GothamMedium)
+	main.TextXAlignment = Enum.TextXAlignment.Left
+	label(panel, "Sub", UDim2.fromScale(0.24, 0.7), UDim2.fromScale(0.72, 0.24), "Нажми ГОТОВ в лобби, чтобы сыграть", 30, Color3.fromRGB(220, 224, 240), Enum.Font.GothamMedium).TextXAlignment = Enum.TextXAlignment.Left
 end
 
 -- Одна арена ---------------------------------------------------------------
@@ -161,22 +216,27 @@ function ArenaBuilder.buildArena(parent: Instance, slot: number, center: Vector3
 	TileLayout.idle(TileLayout.tiles(upper), Random.new(seed))
 	TileLayout.idle(TileLayout.tiles(lower), Random.new(seed + 1))
 
-	-- Обод каждого этажа: тёмное кольцо, светлая кромка и светящееся кольцо снизу.
-	for _, floor in { { r = A.UPPER_RADIUS, y = upperY }, { r = A.LOWER_RADIUS, y = lowerY } } do
-		ring(decor, "Rim", center, floor.r + 2.4, floor.y - 1.1, 1.6, 2.6, DARK, Enum.Material.SmoothPlastic, 56)
-		ring(decor, "Edge", center, floor.r + 1.0, floor.y - 0.3, 0.5, 1.2, WHITE, Enum.Material.SmoothPlastic, 56)
-		ring(beacons, "Beacon", center, floor.r + 1.7, floor.y - 2.5, 0.5, 1.8, GLOW_IDLE, Enum.Material.Neon, 56)
+	-- Обод на кромке плит. Невидимая стена заходит на край пола и выше прыжка.
+	for _, floor in { { half = A.UPPER_RADIUS, y = upperY }, { half = A.LOWER_RADIUS, y = lowerY } } do
+		squareFrame(decor, "Rim", center, floor.half + 1.15, floor.y - 0.9, 1.5, 2.2, DARK, Enum.Material.SmoothPlastic, 0, false)
+		squareFrame(decor, "Edge", center, floor.half + 0.15, floor.y + 0.15, 0.4, 0.9, WHITE, Enum.Material.SmoothPlastic, 0, false)
+		squareFrame(beacons, "Beacon", center, floor.half + 0.8, floor.y - 2.2, 0.4, 1.2, GLOW_IDLE, Enum.Material.Neon, 0, false)
+		squareFrame(decor, "Barrier", center, floor.half - 1.6, floor.y + 10, 24, 4, WHITE, Enum.Material.SmoothPlastic, 1, true)
 	end
 
 	-- Столпы-лучи вокруг арены: белая колонна, неоновая полоса внутри, неоновая капитель.
-	local pillarRadius = A.LOWER_RADIUS + 16
+	local pillarReach = A.LOWER_RADIUS + 14
 	local bottom = lowerY - 24
 	local top = upperY + 26
 	local height = top - bottom
-	for k = 0, 7 do
-		local angle = (k / 8) * math.pi * 2 + math.pi / 8
-		local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
-		local base = Vector3.new(center.X, 0, center.Z) + dir * pillarRadius
+	local corners = {
+		Vector3.new(pillarReach, 0, pillarReach),
+		Vector3.new(pillarReach, 0, -pillarReach),
+		Vector3.new(-pillarReach, 0, pillarReach),
+		Vector3.new(-pillarReach, 0, -pillarReach),
+	}
+	for _, corner in corners do
+		local base = Vector3.new(center.X, 0, center.Z) + corner
 		local cf = CFrame.lookAt(Vector3.new(base.X, (top + bottom) / 2, base.Z), Vector3.new(center.X, (top + bottom) / 2, center.Z))
 		part({ Name = "Pillar", Size = Vector3.new(3.4, height, 3.4), CFrame = cf, Color = WHITE, Parent = decor })
 		part({ Name = "PillarBase", Size = Vector3.new(5.2, 2.2, 5.2), CFrame = cf * CFrame.new(0, -height / 2 - 1.1, 0), Color = DARK, Parent = decor })
@@ -186,7 +246,7 @@ function ArenaBuilder.buildArena(parent: Instance, slot: number, center: Vector3
 	end
 
 	-- Орбиты пастельных сфер: верхняя и нижняя, крутятся в разные стороны.
-	for _, orbit in { { n = 14, r = A.UPPER_RADIUS + 10, y = upperY + 15, spin = 9, size = 1.9 }, { n = 10, r = A.LOWER_RADIUS + 8, y = lowerY + 12, spin = -7, size = 1.5 } } do
+	for _, orbit in { { n = 14, r = A.UPPER_RADIUS * 1.5, y = upperY + 15, spin = 9, size = 1.9 }, { n = 10, r = A.LOWER_RADIUS * 1.42, y = lowerY + 12, spin = -7, size = 1.5 } } do
 		local spinCenter = Vector3.new(center.X, orbit.y, center.Z)
 		for k = 0, orbit.n - 1 do
 			local angle = (k / orbit.n) * math.pi * 2

@@ -6,6 +6,19 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+-- В месте иногда остаётся вторая копия Server со старым генератором плит.
+-- Она тоже запускается и заново собирает арену из кругов и клиньев.
+local marker = "math.floor(half / TILE"
+for _, child in game:GetService("ServerScriptService"):GetChildren() do
+	if child ~= script and child.Name == script.Name then
+		local tile = child:FindFirstChild("TileLayout")
+		local source = if tile and tile:IsA("LuaSourceContainer") then tile.Source else ""
+		if string.find(source, marker, 1, true) == nil then
+			child:Destroy()
+		end
+	end
+end
+
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Economy = require(script:WaitForChild("Economy"))
 local Matchmaker = require(script:WaitForChild("Matchmaker"))
@@ -31,23 +44,24 @@ local lobby = world:FindFirstChild("Lobby")
 local console = lobby and lobby:FindFirstChild("Console")
 Matchmaker.init(arenas :: Folder, console)
 
--- Трансляция: игрок в лобби смотрит случайную активную арену.
+-- Трансляция: только арены с идущим матчем; переключение next/prev на клиенте.
 local spectate = Remotes.get("Spectate")
-local function sendSpectate(player: Player)
-	local controller = Matchmaker.randomActiveSlot()
-	if controller then
-		spectate:FireClient(player, controller.slot, controller.center, controller:isActive())
+spectate.OnServerEvent:Connect(function(player, action)
+	if typeof(action) == "string" and action == "stop" then
+		Matchmaker.clearSpectator(player)
+		return
 	end
-end
-spectate.OnServerEvent:Connect(function(player)
 	if player:GetAttribute("InMatch") == nil then
-		sendSpectate(player)
+		local act = if typeof(action) == "string" then action else "start"
+		Matchmaker.spectate(player, act)
 	end
 end)
 if console then
 	local watchPrompt = console:FindFirstChild("WatchPrompt", true)
 	if watchPrompt and watchPrompt:IsA("ProximityPrompt") then
-		watchPrompt.Triggered:Connect(sendSpectate)
+		watchPrompt.Triggered:Connect(function(player)
+			Matchmaker.spectate(player, "start")
+		end)
 	end
 end
 

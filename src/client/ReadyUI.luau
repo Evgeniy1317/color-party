@@ -8,8 +8,6 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
-local SpectatorCam = require(script.Parent:WaitForChild("SpectatorCam"))
-
 local player = Players.LocalPlayer
 
 local ReadyUI = {}
@@ -135,7 +133,7 @@ end)
 
 watchButton.Activated:Connect(function()
 	Effects.play("click")
-	Remotes.get("Spectate"):FireServer()
+	Remotes.get("Spectate"):FireServer("start")
 end)
 
 -- Сервер — источник истины о готовности (атрибут Ready).
@@ -163,14 +161,6 @@ Remotes.get("QueueUpdate").OnClientEvent:Connect(function(data)
 		status ..= "  ·  старт через " .. math.ceil(data.timeLeft) .. " с"
 	end
 	statusText.Text = status
-end)
-
-Remotes.get("Spectate").OnClientEvent:Connect(function(slot, center, isActive)
-	if player:GetAttribute("InMatch") ~= nil then
-		return
-	end
-	local title = "ТРАНСЛЯЦИЯ  ·  АРЕНА " .. (slot + 1) .. (if isActive then "" else "  (ожидание игроков)")
-	SpectatorCam.start(center, title)
 end)
 
 return ReadyUI
