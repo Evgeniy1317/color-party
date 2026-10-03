@@ -23,6 +23,13 @@ Config.ARENA_SLOTS = {
 	Vector3.new(-430, 48, 330),
 	Vector3.new(430, 48, 330),
 	Vector3.new(0, 76, 1040),
+	-- Дальний ряд: пати не ждёт, пока освободится одна из ближних арен.
+	Vector3.new(-460, 70, 1320),
+	Vector3.new(460, 70, 1320),
+	Vector3.new(0, 94, 1600),
+	Vector3.new(-860, 52, 700),
+	Vector3.new(860, 52, 700),
+	Vector3.new(0, 80, 2060),
 }
 
 Config.ARENA = {
@@ -116,7 +123,7 @@ function Config.roundTime(round: number): number
 	return 2
 end
 
-Config.TARGET_FRACTION = { 0.42, 0.50 } -- доля плит, которые остаются в раунде
+Config.TARGET_FRACTION = { 0.28, 0.34 } -- доля плит, которые остаются в раунде
 Config.FAKE_FROM_ROUND = 8
 Config.FAKE_CHANCE = 0.2
 Config.FAKE_BEFORE_END = 1.5
@@ -126,7 +133,7 @@ Config.DOUBLE_CHANCE = 0.25
 Config.SHRINK_FROM_ROUND = 10
 Config.SHRINK_COUNT = { 4, 6 }
 Config.COINS_ON_FIELD = { 4, 6 }
-Config.COIN_VALUE = 3
+Config.COIN_VALUE = 10
 Config.BONUS_FROM_ROUND = 1
 Config.BONUS_CHANCE = 1
 

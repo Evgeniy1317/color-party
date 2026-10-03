@@ -319,6 +319,31 @@ end
 
 -- Все арены ----------------------------------------------------------------
 
+-- Достраивает только отсутствующие слоты. Уже стоящие арены не трогает.
+function ArenaBuilder.buildMissing(world: Folder?): number
+	local root = world or Workspace:FindFirstChild("World")
+	if not root or not root:IsA("Folder") then
+		error("World не найден: сначала соберите лобби (LobbyBuilder.build())")
+	end
+	TileLayout.ensureTemplates()
+	local arenas = root:FindFirstChild("Arenas")
+	if not arenas then
+		arenas = folder(root, "Arenas")
+	end
+	local built = 0
+	for index, center in Config.ARENA_SLOTS do
+		local slot = index - 1
+		if not arenas:FindFirstChild("Arena" .. slot) then
+			ArenaBuilder.buildArena(arenas, slot, center)
+			built += 1
+		end
+	end
+	pcall(function()
+		ChangeHistoryService:SetWaypoint("Add Color Party arenas")
+	end)
+	return built
+end
+
 function ArenaBuilder.build(world: Folder?): Folder
 	local root = world or Workspace:FindFirstChild("World")
 	if not root then

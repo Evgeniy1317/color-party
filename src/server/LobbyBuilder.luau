@@ -18,10 +18,6 @@ local TOOLBOX = {
 -- Текстуры, загруженные в Roblox (сгенерированы под этот проект).
 local DOME_TEXTURE = "rbxassetid://101100163595514" -- бесшовная мягкая радуга
 local FLOOR_TEXTURE = "rbxassetid://97432180622762" -- приглушённая пастельная мозаика
-local SKY_SIDE_TEXTURE = "rbxassetid://127910635163308" -- градиент: периванкль → розовый горизонт
-local SKY_UP_TEXTURE = "rbxassetid://102022452025820"
-local SKY_DOWN_TEXTURE = "rbxassetid://92401397459718"
-
 local SURFACE = 58
 local LOBBY_RADIUS = 112
 local LOBBY_Z = -180
@@ -98,19 +94,58 @@ lobbyFloor.Touched:Connect(function(hit)
 	end
 end)
 
-local function watch(player)
-	player.CharacterAdded:Connect(function(character)
-		local index = player:GetAttribute("ParkourCheckpoint")
-		local pad = if typeof(index) == "number" then pads[index] else nil
-		if not pad then
+local PARKOUR_Z = -250
+
+local function hookRevive(player, character)
+	local humanoid = character:WaitForChild("Humanoid", 8)
+	local root = character:WaitForChild("HumanoidRootPart", 8)
+	if not humanoid or not root or not root:IsA("BasePart") then
+		return
+	end
+	humanoid.BreakJointsOnDeath = false
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+	local reviving = false
+	humanoid.HealthChanged:Connect(function(health)
+		if health > 0 then
 			return
 		end
-		local root = character:WaitForChild("HumanoidRootPart", 5)
-		if root then
-			task.wait(0.1)
-			character:PivotTo(pad.CFrame + Vector3.new(0, 4, 0))
+		if root.Position.Z > PARKOUR_Z then
+			humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+			return
 		end
+		humanoid.Health = humanoid.MaxHealth
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		if reviving then
+			return
+		end
+		reviving = true
+		local index = player:GetAttribute("ParkourCheckpoint")
+		local pad = if typeof(index) == "number" then pads[index] else nil
+		if pad then
+			character:PivotTo(pad.CFrame + Vector3.new(0, 5, 0))
+		else
+			local spawn = workspace:WaitForChild("World"):WaitForChild("Lobby"):WaitForChild("LobbySpawn")
+			character:PivotTo(spawn.CFrame + Vector3.new(0, 4, 0))
+		end
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		task.delay(0.35, function()
+			reviving = false
+		end)
 	end)
+end
+
+local function watch(player)
+	player.CharacterAdded:Connect(function(character)
+		task.spawn(hookRevive, player, character)
+	end)
+	if player.Character then
+		task.spawn(hookRevive, player, player.Character)
+	end
+end
+	if player.Character then
+		task.spawn(hookDeath, player, player.Character)
+	end
 end
 Players.PlayerAdded:Connect(watch)
 for _, player in Players:GetPlayers() do
@@ -168,18 +203,39 @@ local function bindBounce(part)
 	if typeof(power) ~= "number" then
 		power = 86
 	end
+	-- Курс идёт в сторону взгляда площадки. Разовый AssemblyLinearVelocity
+	-- человечек тут же затирает, поэтому держим BodyVelocity: вверх, потом вперёд.
+	local forward = part.CFrame.LookVector * 30
 	part.Touched:Connect(function(hit)
 		local humanoid = hit.Parent:FindFirstChildOfClass("Humanoid")
 		local root = hit.Parent:FindFirstChild("HumanoidRootPart")
-		if not humanoid or not root then
+		if not humanoid or not root or humanoid.Health <= 0 then
+			return
+		end
+		if root:FindFirstChild("TrampolineBoost") then
 			return
 		end
 		local now = os.clock()
-		if lastBounce[humanoid] and now - lastBounce[humanoid] < 0.45 then
+		if lastBounce[humanoid] and now - lastBounce[humanoid] < 0.7 then
 			return
 		end
 		lastBounce[humanoid] = now
-		root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X * 0.25, power, root.AssemblyLinearVelocity.Z * 0.25)
+		local boost = Instance.new("BodyVelocity")
+		boost.Name = "TrampolineBoost"
+		boost.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+		boost.Velocity = Vector3.new(forward.X, power, forward.Z)
+		boost.Parent = root
+		task.delay(0.08, function()
+			if boost.Parent then
+				boost.MaxForce = Vector3.new(1e6, 0, 1e6)
+				boost.Velocity = forward
+			end
+		end)
+		task.delay(0.48, function()
+			if boost.Parent then
+				boost:Destroy()
+			end
+		end)
 	end)
 end
 
@@ -190,6 +246,14 @@ for _, child in folder:GetChildren() do
 		end
 		if typeof(child:GetAttribute("Bounce")) == "number" then
 			bindBounce(child)
+		end
+		if child:GetAttribute("Kill") == true then
+			child.Touched:Connect(function(hit)
+				local humanoid = hit.Parent:FindFirstChildOfClass("Humanoid")
+				if humanoid and humanoid.Health > 0 then
+					humanoid.Health = 0
+				end
+			end)
 		end
 	end
 end
@@ -288,6 +352,26 @@ RunService.Heartbeat:Connect(function(dt)
 			if light then
 				light.Color = item.Color
 			end
+		end
+		local patrol = item:GetAttribute("Patrol")
+		if typeof(patrol) == "number" and typeof(item:GetAttribute("Spin")) ~= "number" then
+			local base = bases[item]
+			if not base then
+				base = item.CFrame
+				bases[item] = base
+			end
+			local offset = math.sin(elapsed * 1.15 + base.Position.Z * 0.08) * patrol
+			item.CFrame = base + Vector3.new(offset, 0, 0)
+		end
+		local lift = item:GetAttribute("Lift")
+		if typeof(lift) == "number" and typeof(item:GetAttribute("Spin")) ~= "number" then
+			local base = bases[item]
+			if not base then
+				base = item.CFrame
+				bases[item] = base
+			end
+			local offset = math.sin(elapsed * 1.35 + base.Position.Z * 0.05) * lift
+			item.CFrame = base + Vector3.new(0, offset, 0)
 		end
 		local pulse = item:GetAttribute("Pulse")
 		if typeof(pulse) == "number" then
@@ -474,6 +558,35 @@ end
 local function pivotModelBottom(model: Model, cf: CFrame)
 	local _, size = model:GetBoundingBox()
 	model:PivotTo(cf * CFrame.new(0, size.Y / 2, 0))
+end
+
+local function placeKit(parent: Instance, name: string, assetId: number, bottomCF: CFrame, axis: string, target: number): Model?
+	local model = cloneToolbox(name, assetId)
+	if not model then
+		return nil
+	end
+	model.Name = name
+	model.Parent = parent
+	for _, desc in model:GetDescendants() do
+		if desc:IsA("LuaSourceContainer") or desc:IsA("ProximityPrompt") then
+			desc:Destroy()
+		end
+	end
+	local _, bbox = model:GetBoundingBox()
+	local current = if axis == "X" then bbox.X elseif axis == "Z" then bbox.Z else bbox.Y
+	if current > 0.05 then
+		pcall(function()
+			model:ScaleTo(math.clamp(target / current, 0.05, 6))
+		end)
+	end
+	for _, desc in model:GetDescendants() do
+		if desc:IsA("BasePart") then
+			desc.Anchored = true
+			desc.CanCollide = true
+		end
+	end
+	pivotModelBottom(model, bottomCF)
+	return model
 end
 
 -- Табло на стене: фиксированный размер в студах, текст не раздувается с дистанцией.
@@ -1355,91 +1468,118 @@ function LobbyBuilder.buildParkour(world: Folder)
 		})
 	end
 
-	-- Арка с табличкой.
-	local archZ = startZ - 6
-	for _, side in { -1, 1 } do
-		part({
-			Name = "ArchPillar",
-			Size = Vector3.new(1.6, 9, 1.6),
-			CFrame = CFrame.new(side * 8, y + 4.5, archZ),
-			Color = white,
-			Material = Enum.Material.SmoothPlastic,
-			Parent = props,
-		})
-		local top = part({
-			Name = "ArchBall",
-			Size = Vector3.new(2.4, 2.4, 2.4),
-			CFrame = CFrame.new(side * 8, y + 10.2, archZ),
-			Color = hue(if side < 0 then 0 else 8),
-			Material = Enum.Material.SmoothPlastic,
-			Shape = Enum.PartType.Ball,
-			CanCollide = false,
-			Parent = props,
-		})
-		top:SetAttribute("Bob", 0.9)
-	end
+	-- Табличка в зале, перед стеной и сразу над белой аркой.
+	local doorY = SURFACE + 16.8
+	local doorPos = pointOnLobby(270, LOBBY_RADIUS - 10.8, doorY)
+	local signCF = CFrame.lookAt(doorPos, Vector3.new(doorPos.X, doorY, LOBBY_Z))
+	part({
+		Name = "ParkourSignFrame",
+		Size = Vector3.new(24.2, 7.2, 0.35),
+		CFrame = signCF * CFrame.new(0, 0, 0.45),
+		Color = Color3.fromRGB(255, 206, 92),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = props,
+	})
 	local sign = part({
 		Name = "ParkourSign",
-		Size = Vector3.new(17.6, 4.6, 0.8),
-		CFrame = CFrame.lookAt(Vector3.new(0, y + 8.2, archZ), Vector3.new(0, y + 8.2, archZ + 10)),
-		Color = Color3.fromRGB(38, 34, 52),
+		Size = Vector3.new(22.6, 5.8, 0.45),
+		CFrame = signCF,
+		Color = Color3.fromRGB(28, 26, 42),
 		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
 		Parent = props,
 	})
 	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = face
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 42
 		gui.LightInfluence = 0
-		gui.Brightness = 1
-		gui.PixelsPerStud = 40
+		gui.Brightness = 2
 		gui.Parent = sign
 		local title = Instance.new("TextLabel")
 		title.BackgroundTransparency = 1
-		title.Size = UDim2.fromScale(1, 0.58)
+		title.Position = UDim2.fromScale(0.06, 0.08)
+		title.Size = UDim2.fromScale(0.88, 0.38)
 		title.Font = Enum.Font.GothamBlack
 		title.TextScaled = true
-		title.Text = "PARKOUR"
-		title.TextColor3 = Color3.fromRGB(255, 226, 120)
+		title.TextWrapped = false
+		title.Text = "COMPLETE THE PARKOUR"
+		title.TextColor3 = Color3.fromRGB(255, 214, 110)
 		title.Parent = gui
+		local rule = Instance.new("Frame")
+		rule.BackgroundColor3 = Color3.fromRGB(255, 206, 92)
+		rule.BorderSizePixel = 0
+		rule.Position = UDim2.fromScale(0.22, 0.5)
+		rule.Size = UDim2.fromScale(0.56, 0.028)
+		rule.Parent = gui
 		local subtitle = Instance.new("TextLabel")
 		subtitle.BackgroundTransparency = 1
-		subtitle.Position = UDim2.fromScale(0, 0.58)
-		subtitle.Size = UDim2.fromScale(1, 0.36)
-		subtitle.Font = Enum.Font.GothamMedium
+		subtitle.Position = UDim2.fromScale(0.06, 0.56)
+		subtitle.Size = UDim2.fromScale(0.88, 0.34)
+		subtitle.Font = Enum.Font.GothamBold
 		subtitle.TextScaled = true
-		subtitle.Text = "Reach the end & get a reward"
-		subtitle.TextColor3 = Color3.fromRGB(236, 236, 246)
+		subtitle.TextWrapped = false
+		subtitle.Text = "AND GET A REWARD"
+		subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 		subtitle.Parent = gui
 	end
 
-	-- 1. Парящие шары: шаг вверх, стоять неудобно.
-	for index = 1, 6 do
-		y += 1.6
-		local size = 5.4
-		local centerZ = advance(6.5, size)
-		local x = if index % 2 == 0 then 3.8 else -3.8
-		local orb = part({
-			Name = "Orb" .. index,
-			Size = Vector3.new(size, size, size),
-			CFrame = CFrame.new(x, y - size / 2, centerZ),
-			Color = nextTone(),
-			Material = Enum.Material.SmoothPlastic,
-			Shape = Enum.PartType.Ball,
-			Parent = obstacles,
-		})
-		if index % 3 == 0 then
-			orb:SetAttribute("Bob", 1.1)
+	-- 1. Каменный мост из двери.
+	local bridgeLen = 52
+	local bridgeZ = advance(1, bridgeLen)
+	placeKit(props, "ParkourStairs", 2344294495, CFrame.new(0, y - 0.4, bridgeZ), "Z", bridgeLen)
+
+	-- 2. Прыжок на площадку.
+	block("GapLand", 7, Vector3.new(10, 1.2, 8), 0, PALETTE.stone)
+
+	-- 3. Ящики: сначала один, потом стопка.
+	local crateZ = advance(5, 6)
+	placeKit(obstacles, "ParkourCrate", 182451181, CFrame.new(0, y, crateZ), "Y", 4)
+	local stackZ = advance(4.5, 6)
+	placeKit(obstacles, "ParkourCrate", 182451181, CFrame.new(0, y, stackZ) * CFrame.Angles(0, math.rad(18), 0), "Y", 4)
+	placeKit(obstacles, "ParkourCrate", 182451181, CFrame.new(0, y + 4, stackZ) * CFrame.Angles(0, math.rad(-12), 0), "Y", 4)
+	y += 8
+	block("CrateTop", 4, Vector3.new(10, 1.2, 8), 0, PALETTE.wood)
+
+	-- 4. Лестница наверх. Карабкаться можно по ферме, модель рядом.
+	local ladderZ = advance(2.5, 3)
+	local climb = 14
+	local truss = Instance.new("TrussPart")
+	truss.Name = "Climb"
+	truss.Size = Vector3.new(2, climb, 2)
+	truss.Anchored = true
+	truss.Color = PALETTE.woodDark
+	truss.CFrame = CFrame.new(0, y + climb / 2, ladderZ)
+	truss.Parent = obstacles
+	local ladder = placeKit(props, "ParkourLadder", 877563042, CFrame.new(1.8, y, ladderZ), "Y", climb)
+	if ladder then
+		for _, desc in ladder:GetDescendants() do
+			if desc:IsA("BasePart") then
+				desc.CanCollide = false
+			end
 		end
 	end
-	mark(5, 6.5, 0)
+	y += climb
+	block("LadderTop", 2, Vector3.new(10, 1.2, 8), 0, PALETTE.stone)
 
-	-- 2. Исчезающие плитки.
-	for index = 1, 5 do
-		local tile = block("Vanish" .. index, 4.4, Vector3.new(5, 1, 4.2), if index % 2 == 0 then 2.4 else -2.4, nextTone())
-		tile:SetAttribute("Disappear", true)
-		tile:SetAttribute("Restore", 1.6)
-	end
-	mark(5, 5, 0)
+	-- 5. Батут на следующую площадку.
+	local bounceZ = advance(3, 8)
+	placeKit(obstacles, "ParkourTrampoline", 12088629887, CFrame.new(0, y, bounceZ), "X", 9)
+	local pad = part({
+		Name = "BouncePad",
+		Size = Vector3.new(7, 0.45, 7),
+		CFrame = CFrame.new(0, y + 1.55, bounceZ),
+		Color = PALETTE.wood,
+		Material = Enum.Material.SmoothPlastic,
+		Transparency = 1,
+		Parent = obstacles,
+	})
+	pad:SetAttribute("Bounce", 92)
+	y += 16
+	block("BounceCatch", 9, Vector3.new(12, 1.2, 10), 0, white)
+	mark(5, 4, 0)
 
 	-- 3. Вращающийся диск с метлой над ним: надо перепрыгивать.
 	local wheelZ = advance(4.5, 18)
@@ -1576,6 +1716,150 @@ function LobbyBuilder.buildParkour(world: Folder)
 	-- 11. Длинная финальная горка.
 	slide("SlideB", 14, 16, 38, hue(10, 0.5, 0.96))
 
+	-- 12. Лавовый каньон: дальше и злее, чем первая половина.
+	local lavaMark = mark(5, 4, 0)
+	marker(lavaMark, "ЛАВА", Color3.fromRGB(255, 120, 48), 5)
+
+	local function lavaSpan(zStart: number, zEnd: number, halfX: number, pitY: number?)
+		local surface = pitY or y
+		local length = math.abs(zStart - zEnd) + 4
+		local center = (zStart + zEnd) / 2
+		local bed = part({
+			Name = "Lava",
+			Size = Vector3.new(halfX * 2, 1.6, length),
+			CFrame = CFrame.new(0, surface - 6.2, center),
+			Color = Color3.fromRGB(255, 96, 28),
+			Material = Enum.Material.CrackedLava,
+			CanCollide = false,
+			Parent = obstacles,
+		})
+		bed:SetAttribute("Kill", true)
+		for _, side in { -1, 1 } do
+			part({
+				Name = "LavaBank",
+				Size = Vector3.new(2.4, 7, length),
+				CFrame = CFrame.new(side * (halfX + 1.1), surface + 0.2, center),
+				Color = PALETTE.stoneDeep,
+				Material = Enum.Material.Slate,
+				CanCollide = false,
+				Parent = obstacles,
+			})
+		end
+		for index = 1, 3 do
+			local ember = part({
+				Name = "Ember",
+				Size = Vector3.new(1.1, 1.1, 1.1),
+				CFrame = CFrame.new((index - 2) * halfX * 0.45, surface - 3.4, center + (index - 2) * length * 0.22),
+				Color = Color3.fromRGB(255, 150, 48),
+				Material = Enum.Material.CrackedLava,
+				Shape = Enum.PartType.Ball,
+				CanCollide = false,
+				Parent = props,
+			})
+			ember:SetAttribute("Bob", 1.4)
+		end
+	end
+
+	local islandXs = { 0, 5.5, -5.5, 6, -4.5, 5, 0 }
+	local zIslands = edge
+	for index = 1, 7 do
+		local stone = block("Island" .. index, 6.2, Vector3.new(if index % 2 == 0 then 4 else 5, 1.1, 4), islandXs[index], PALETTE.stoneDark)
+		if index == 3 or index == 6 then
+			stone:SetAttribute("Disappear", true)
+			stone:SetAttribute("Restore", 1.25)
+		end
+	end
+	lavaSpan(zIslands, edge, 14)
+
+	mark(4.5, 4, 0)
+
+	local zMovers = edge
+	for index = 1, 3 do
+		local mover = block("Mover" .. index, 5.4, Vector3.new(6.5, 1, 5), 0, nextTone())
+		mover:SetAttribute("Patrol", 7.5)
+	end
+	lavaSpan(zMovers, edge, 16)
+
+	local zPillars = edge
+	for index = 1, 2 do
+		local pillar = block("Pillar" .. index, 5.2, Vector3.new(5, 1, 5), if index == 1 then -3 else 3, PALETTE.stone)
+		pillar:SetAttribute("Lift", 3.4)
+	end
+	lavaSpan(zPillars, edge, 12)
+
+	local zCrumble = edge
+	for index = 1, 5 do
+		local tile = block("Crumble" .. index, 3.1, Vector3.new(4.4, 1, 3.6), if index % 2 == 0 then 2.2 else -2.2, nextTone())
+		tile:SetAttribute("Disappear", true)
+		tile:SetAttribute("Restore", 1.15)
+	end
+	lavaSpan(zCrumble, edge, 10)
+
+	local zLogs = edge
+	for index = 1, 4 do
+		local size = Vector3.new(10, 2.8, 2.8)
+		local centerZ = advance(2.5, size.Z)
+		local log = part({
+			Name = "LavaLog" .. index,
+			Size = size,
+			CFrame = CFrame.new(0, y - size.Y / 2 + 0.4, centerZ),
+			Color = PALETTE.woodDark,
+			Material = Enum.Material.Wood,
+			Shape = Enum.PartType.Cylinder,
+			Parent = obstacles,
+		})
+		spinMotor(obstacles, "LavaLogSpin" .. index, Vector3.new(1, 0, 0), if index % 2 == 0 then -2.6 else 2.6, Vector3.new(0, y - size.Y / 2 + 0.4, centerZ), log)
+	end
+	lavaSpan(zLogs, edge, 12)
+
+	local bridgeGap = 3
+	local bridgeLength = 24
+	local bridgeCenter = edge - bridgeGap - bridgeLength / 2
+	local zBridge = edge
+	block("LavaBridge", bridgeGap, Vector3.new(2.2, 1, bridgeLength), 0, PALETTE.stone)
+	lavaSpan(zBridge, edge, 11)
+	local pivotPos = Vector3.new(0, y + 16, bridgeCenter)
+	local hammer = part({
+		Name = "LavaHammer",
+		Size = Vector3.new(5.2, 5.2, 5.2),
+		CFrame = CFrame.new(0, y + 2.8, bridgeCenter),
+		Color = Color3.fromRGB(196, 64, 36),
+		Material = Enum.Material.Slate,
+		Shape = Enum.PartType.Ball,
+		Parent = obstacles,
+	})
+	local rodSpan = pivotPos - hammer.Position
+	local rod = part({
+		Name = "LavaHammerRod",
+		Size = Vector3.new(0.45, rodSpan.Magnitude, 0.45),
+		CFrame = CFrame.new((pivotPos + hammer.Position) / 2),
+		Color = PALETTE.metalDark,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+		Parent = obstacles,
+	})
+	weldTo(hammer, rod)
+	local lavaSwing = hingeMotor(obstacles, "SwingHinge", Vector3.new(0, 0, 1), 0, CFrame.new(pivotPos), hammer, hammer.CFrame:PointToObjectSpace(pivotPos))
+	lavaSwing.ActuatorType = Enum.ActuatorType.Servo
+	lavaSwing.AngularSpeed = 1.7
+	lavaSwing.ServoMaxTorque = 10000000
+	lavaSwing.TargetAngle = 0
+	lavaSwing:SetAttribute("Swing", 68)
+	lavaSwing.LimitsEnabled = true
+	lavaSwing.LowerAngle = -72
+	lavaSwing.UpperAngle = 72
+	mark(4.5, 3, 0)
+
+	local zSpring = edge
+	local pitY = y
+	local lavaSpring = block("LavaSpring", 3, Vector3.new(6, 0.6, 6), 0, Color3.fromRGB(255, 120, 48))
+	lavaSpring:SetAttribute("Bounce", 90)
+	marker(lavaSpring, "ЛАВА", Color3.fromRGB(255, 140, 60), 3)
+	local afterSpring = edge
+	y += 15
+	block("LavaCatch", 8, Vector3.new(12, 1.2, 10), 0, white)
+	lavaSpan(zSpring, afterSpring - 1, 12, pitY)
+
 	-- Финиш и награда.
 	local finishZ = advance(0, 22)
 	disc("Finish", 11, 1.2, Vector3.new(0, y - 0.6, finishZ), white, Enum.Material.SmoothPlastic, props)
@@ -1625,7 +1909,7 @@ function LobbyBuilder.buildParkour(world: Folder)
 
 	-- Декор: парящие шарики вдоль трассы.
 	local zStart = LOBBY_Z - LOBBY_RADIUS - 20
-	for index = 0, 14 do
+	for index = 0, 26 do
 		local z = zStart - index * 22
 		local side = if index % 2 == 0 then 1 else -1
 		orbDecor(side * (16 + (index % 3) * 4), z, 6 + (index % 4) * 3, hue(index, 0.45, 0.98), 1.6 + (index % 3) * 0.5)
@@ -1638,27 +1922,34 @@ function LobbyBuilder.buildParkour(world: Folder)
 end
 
 function LobbyBuilder.buildLighting(world: Folder)
-	Lighting.ClockTime = 12
-	Lighting.Brightness = 0
-	Lighting.GeographicLatitude = 18
-	Lighting.GlobalShadows = false
-	Lighting.Ambient = Color3.fromRGB(188, 192, 204)
-	Lighting.OutdoorAmbient = Color3.fromRGB(176, 182, 196)
-	Lighting.EnvironmentDiffuseScale = 0.2
-	Lighting.EnvironmentSpecularScale = 0
-	Lighting.ExposureCompensation = 0.08
+	-- Полдень чуть смещён, чтобы диск солнца был виден, а не стоял в зените.
+	Lighting.ClockTime = 15.1
+	Lighting.Brightness = 2.3
+	Lighting.GeographicLatitude = 28
+	Lighting.GlobalShadows = true
+	Lighting.Ambient = Color3.fromRGB(148, 158, 176)
+	Lighting.OutdoorAmbient = Color3.fromRGB(176, 188, 206)
+	Lighting.EnvironmentDiffuseScale = 0.45
+	Lighting.EnvironmentSpecularScale = 0.25
+	Lighting.ExposureCompensation = 0.05
+	pcall(function()
+		(Lighting :: any).ShadowSoftness = 0.35
+	end)
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future
+	end)
 
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
 	if not atmosphere then
 		atmosphere = Instance.new("Atmosphere")
 		atmosphere.Parent = Lighting
 	end
-	atmosphere.Density = 0.18
-	atmosphere.Offset = 0.2
-	atmosphere.Color = Color3.fromRGB(198, 214, 232)
-	atmosphere.Decay = Color3.fromRGB(170, 186, 210)
-	atmosphere.Glare = 0
-	atmosphere.Haze = 0.35
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.22
+	atmosphere.Color = Color3.fromRGB(168, 206, 255)
+	atmosphere.Decay = Color3.fromRGB(255, 186, 132)
+	atmosphere.Glare = 0.42
+	atmosphere.Haze = 1.15
 
 	local function effect(className: string, name: string): Instance
 		local existing = Lighting:FindFirstChild(name)
@@ -1671,27 +1962,54 @@ function LobbyBuilder.buildLighting(world: Folder)
 		return created
 	end
 
-	for _, name in { "LobbyBloom", "LobbySun" } do
-		local leftover = Lighting:FindFirstChild(name)
-		if leftover then
-			leftover:Destroy()
+	local color = effect("ColorCorrectionEffect", "LobbyColor") :: ColorCorrectionEffect
+	color.TintColor = Color3.fromRGB(255, 246, 232)
+	color.Saturation = 0.14
+	color.Contrast = 0.06
+	color.Brightness = 0.02
+
+	local bloom = effect("BloomEffect", "LobbyBloom") :: BloomEffect
+	bloom.Intensity = 0.32
+	bloom.Size = 28
+	bloom.Threshold = 0.95
+
+	local rays = effect("SunRaysEffect", "LobbySun") :: SunRaysEffect
+	rays.Intensity = 0.09
+	rays.Spread = 0.82
+
+	local sky: Sky? = nil
+	for _, child in Lighting:GetChildren() do
+		if child:IsA("Sky") then
+			if sky then
+				child:Destroy()
+			else
+				sky = child
+			end
+		elseif child:IsA("DepthOfFieldEffect") then
+			child:Destroy()
 		end
 	end
-
-	local color = effect("ColorCorrectionEffect", "LobbyColor") :: ColorCorrectionEffect
-	color.TintColor = Color3.fromRGB(245, 244, 238)
-	color.Saturation = 0.04
-	color.Contrast = 0.02
-	color.Brightness = 0.04
+	if not sky then
+		sky = Instance.new("Sky")
+		sky.Parent = Lighting
+	end
+	local skyInstance = sky :: Sky
+	for _, face in { "SkyboxBk", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp", "SkyboxDn" } do
+		(skyInstance :: any)[face] = ""
+	end
+	skyInstance.CelestialBodiesShown = true
+	skyInstance.StarCount = 0
+	skyInstance.MoonAngularSize = 0
+	skyInstance.SunAngularSize = 18
 
 	local clouds = Workspace.Terrain:FindFirstChildOfClass("Clouds")
 	if not clouds then
 		clouds = Instance.new("Clouds")
 		clouds.Parent = Workspace.Terrain
 	end
-	clouds.Cover = 0.28
+	clouds.Cover = 0.38
 	clouds.Density = 0.22
-	clouds.Color = Color3.fromRGB(232, 236, 242)
+	clouds.Color = Color3.fromRGB(236, 240, 248)
 
 	local systems = world:FindFirstChild("Systems")
 	if not systems then
@@ -1760,23 +2078,6 @@ function LobbyBuilder.buildDecor(world: Folder)
 		lobby = LobbyBuilder.buildLobby(world)
 	end
 	local decor = subfolder(lobby, "Decor")
-	for index = 0, 11 do
-		local angle = index * 30
-		if angle >= 60 and angle <= 120 then
-			continue
-		end
-		local color = Color3.fromHSV(index / 12, 0.85, 1)
-		local spot = pointOnLobby(angle, 78, SURFACE + 8)
-		part({
-			Name = "Lantern" .. index,
-			Size = Vector3.new(1.6, 2.2, 1.6),
-			CFrame = CFrame.new(spot),
-			Color = color,
-			Material = Enum.Material.SmoothPlastic,
-			CanCollide = false,
-			Parent = decor,
-		})
-	end
 
 	local fountainAt = pointOnLobby(200, 70, SURFACE)
 	disc("Basin", 9, 1.3, Vector3.new(fountainAt.X, SURFACE + 0.7, fountainAt.Z), Color3.fromRGB(120, 210, 230), Enum.Material.SmoothPlastic, decor)
@@ -2018,35 +2319,6 @@ function LobbyBuilder.build()
 	pcall(function()
 		settings().Studio["Show Grid"] = false
 	end)
-
-	-- Небо: один Sky с мягким градиентом (сгенерированные текстуры), лишние
-	-- Sky и постэффекты (лучи, блум, размытие дали) убираем — за окном должно быть чётко.
-	local sky: Sky? = nil
-	for _, child in Lighting:GetChildren() do
-		if child:IsA("Sky") then
-			if sky then
-				child:Destroy()
-			else
-				sky = child
-			end
-		elseif child:IsA("SunRaysEffect") or child:IsA("BloomEffect") or child:IsA("DepthOfFieldEffect") then
-			child:Destroy()
-		end
-	end
-	if not sky then
-		sky = Instance.new("Sky")
-		sky.Parent = Lighting
-	end
-	local skyInstance = sky :: Sky
-	for _, face in { "SkyboxBk", "SkyboxFt", "SkyboxLf", "SkyboxRt" } do
-		(skyInstance :: any)[face] = SKY_SIDE_TEXTURE
-	end
-	skyInstance.SkyboxUp = SKY_UP_TEXTURE
-	skyInstance.SkyboxDn = SKY_DOWN_TEXTURE
-	skyInstance.CelestialBodiesShown = false
-	skyInstance.StarCount = 0
-	skyInstance.MoonAngularSize = 0
-	skyInstance.SunAngularSize = 0
 
 	for _, descendant in Workspace:GetDescendants() do
 		if descendant:IsA("SpawnLocation") and descendant.Name ~= "LobbySpawn" then

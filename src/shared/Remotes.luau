@@ -7,6 +7,8 @@ local RunService = game:GetService("RunService")
 local NAMES = {
 	"SetReady", -- клиент → сервер: (ready: boolean, auto: boolean)
 	"QueueUpdate", -- сервер → все: { count, timeLeft, waitingArena, active = {slot...} }
+	"Party", -- клиент → сервер: invite | accept | decline | leave | kick | robloxInvite | locate | joinFriend
+	"PartyState", -- сервер → клиент: { members, invite, notice, elsewhere }
 	"MatchState", -- сервер → участники/зрители: { phase, slot, ... }
 	"RoundEvent", -- сервер → участники/зрители: (text: string, kind: string)
 	"Spectate", -- клиент → сервер: "start" | "next" | "prev" | "stop"; сервер → клиент: { ok, slot, center, index, total, message? }

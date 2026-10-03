@@ -3,7 +3,6 @@
 
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
-local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -74,14 +73,50 @@ local function load(player: Player)
 	push(player, 0, "load")
 end
 
+local saveQueued: { [Player]: boolean } = {}
+
 local function save(player: Player)
 	local profile = profiles[player]
 	if not profile or not store then
 		return
 	end
-	pcall(function()
-		(store :: DataStore):SetAsync("p_" .. player.UserId, profile)
+	local payload = {
+		coins = profile.coins,
+		wins = profile.wins,
+		rounds = profile.rounds,
+		best = profile.best,
+	}
+	local key = "p_" .. player.UserId
+	for _ = 1, 3 do
+		local ok = pcall(function()
+			(store :: DataStore):UpdateAsync(key, function()
+				return payload
+			end)
+		end)
+		if ok then
+			return
+		end
+		task.wait(1)
+	end
+	warn("[ColorParty] не удалось сохранить монеты игрока " .. player.UserId)
+end
+
+local function queueSave(player: Player)
+	if saveQueued[player] then
+		return
+	end
+	saveQueued[player] = true
+	task.delay(2, function()
+		saveQueued[player] = nil
+		if player.Parent then
+			save(player)
+		end
 	end)
+end
+
+function Economy.save(player: Player)
+	saveQueued[player] = nil
+	save(player)
 end
 
 function Economy.init()
@@ -90,15 +125,22 @@ function Economy.init()
 		task.spawn(load, player)
 	end
 	Players.PlayerRemoving:Connect(function(player)
+		saveQueued[player] = nil
 		save(player)
 		profiles[player] = nil
 	end)
 	game:BindToClose(function()
-		if RunService:IsStudio() then
-			return
-		end
+		local left = 0
 		for _, player in Players:GetPlayers() do
-			save(player)
+			left += 1
+			task.spawn(function()
+				save(player)
+				left -= 1
+			end)
+		end
+		local started = os.clock()
+		while left > 0 and os.clock() - started < 8 do
+			task.wait(0.1)
 		end
 	end)
 end
@@ -108,16 +150,20 @@ function Economy.addCoins(player: Player, amount: number, reason: string)
 	if not profile or amount == 0 then
 		return
 	end
-	profile.coins = math.max(0, profile.coins + math.round(amount))
-	push(player, math.round(amount), reason)
+	local gain = math.round(amount)
+	profile.coins = math.max(0, profile.coins + gain)
+	push(player, gain, reason)
+	queueSave(player)
 end
 
 function Economy.addWin(player: Player)
 	local profile = profiles[player]
-	if profile then
-		profile.wins += 1
+	if not profile then
+		return
 	end
-	Economy.addCoins(player, Config.ECONOMY.WIN, "win")
+	profile.wins += 1
+	push(player, 0, "win")
+	queueSave(player)
 end
 
 function Economy.recordRounds(player: Player, rounds: number)

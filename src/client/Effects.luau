@@ -16,8 +16,8 @@ local SOUNDS = {
 	out = { id = "rbxasset://sounds/uuhhh.mp3", volume = 0.6 },
 	win = { id = "rbxasset://sounds/victory.wav", volume = 0.7 },
 	click = { id = "rbxasset://sounds/button.wav", volume = 0.5 },
-	coin = { id = "rbxassetid://130201387574815", volume = 0.75 },
-	bonus = { id = "rbxasset://sounds/action_get_up.mp3", volume = 0.6 },
+	coin = { id = "rbxassetid://130201387574815", volume = 0.28 },
+	bonus = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.28 },
 	fall = { id = "rbxasset://sounds/action_falling.mp3", volume = 0.5 },
 }
 
@@ -41,13 +41,8 @@ local function sound(name: string): Sound?
 	return s
 end
 
-function Effects.play(name: string, pitch: number?)
-	local s = sound(name)
-	if not s then
-		return
-	end
-	s.PlaybackSpeed = pitch or 1
-	s:Play()
+function Effects.play(_name: string, _pitch: number?)
+	return
 end
 
 -- Экранная вспышка ----------------------------------------------------------
@@ -70,6 +65,8 @@ local function ensureFlash(): Frame
 	frame.BackgroundColor3 = Color3.new(1, 1, 1)
 	frame.BackgroundTransparency = 1
 	frame.BorderSizePixel = 0
+	frame.Active = false
+	frame.Interactable = false
 	frame.Parent = gui
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "Edge"

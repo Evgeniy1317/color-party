@@ -117,8 +117,8 @@ function RoundRules.pick(round: number, palette: { string }, rng: Random, lastTa
 			shown = { a, b },
 			time = time,
 			assign = {
-				{ id = a, fraction = 0.24, spread = true },
-				{ id = b, fraction = 0.24, spread = true },
+				{ id = a, fraction = 0.16, spread = true },
+				{ id = b, fraction = 0.16, spread = true },
 			},
 			fillers = without(palette, banned),
 			hubId = pick(rng, without(palette, banned)),

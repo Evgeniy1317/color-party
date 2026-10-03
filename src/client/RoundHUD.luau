@@ -173,15 +173,15 @@ streakLabel.TextXAlignment = Enum.TextXAlignment.Right
 -- Лента событий.
 local feed = Instance.new("Frame")
 feed.Name = "Feed"
-feed.AnchorPoint = Vector2.new(0.5, 0)
-feed.Position = UDim2.new(0.5, 0, 0, 156)
-feed.Size = UDim2.fromOffset(392, 132)
+feed.AnchorPoint = Vector2.new(0, 0.5)
+feed.Position = UDim2.new(0, 16, 0.62, 0)
+feed.Size = UDim2.fromOffset(360, 160)
 feed.BackgroundTransparency = 1
 feed.Parent = gui
 local feedLayout = Instance.new("UIListLayout")
 feedLayout.SortOrder = Enum.SortOrder.LayoutOrder
 feedLayout.Padding = UDim.new(0, 6)
-feedLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+feedLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 feedLayout.Parent = feed
 
 -- Монеты.
@@ -264,7 +264,6 @@ resultsHint.Size = UDim2.new(1, 0, 0, 20)
 -- Логика --------------------------------------------------------------------
 
 local timerConnection: RBXScriptConnection? = nil
-local lastTickSecond = -1
 
 local function stopTimer()
 	if timerConnection then
@@ -276,17 +275,11 @@ end
 local function startTimer(duration: number, color: Color3)
 	stopTimer()
 	local startAt = os.clock()
-	lastTickSecond = -1
 	bar.BackgroundColor3 = color
 	timerConnection = RunService.RenderStepped:Connect(function()
 		local left = math.max(0, duration - (os.clock() - startAt))
 		bar.Size = UDim2.fromScale(left / duration, 1)
 		timeLabel.Text = string.format("%.1f", left)
-		local whole = math.ceil(left)
-		if whole <= 3 and whole >= 1 and whole ~= lastTickSecond then
-			lastTickSecond = whole
-			Effects.play("tick", 1 + (3 - whole) * 0.15)
-		end
 		if left <= 0 then
 			stopTimer()
 		end
@@ -395,70 +388,76 @@ player:GetAttributeChangedSignal("Shield"):Connect(function()
 end)
 
 local function addFeed(text: string, kind: string)
-	local item = Instance.new("TextLabel")
-	item.BackgroundColor3 = Color3.fromRGB(22, 20, 34)
-	item.BackgroundTransparency = 0
-	item.BorderSizePixel = 0
-	item.Size = UDim2.fromOffset(392, 36)
-	item.Font = Enum.Font.GothamBold
-	item.TextSize = 16
-	item.TextXAlignment = Enum.TextXAlignment.Left
-	item.TextYAlignment = Enum.TextYAlignment.Center
-	item.TextTruncate = Enum.TextTruncate.None
-	item.TextWrapped = true
-	item.Text = text
-	item.LayoutOrder = os.clock() * 1000
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 12)
-	pad.PaddingRight = UDim.new(0, 12)
-	pad.Parent = item
-	local colors = {
-		info = MUTED,
-		fall = Color3.fromRGB(255, 190, 120),
-		out = Color3.fromRGB(255, 150, 160),
-		warn = Color3.fromRGB(255, 214, 120),
-		bonus = Color3.fromRGB(190, 230, 255),
-		win = Color3.fromRGB(255, 214, 120),
-	}
-	item.TextColor3 = WHITE
-	item.Parent = feed
-	corner(item, 10)
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2
-	stroke.Color = colors[kind] or WHITE
-	stroke.Transparency = 0.15
-	stroke.Parent = item
-	if kind == "bonus" then
-		local dash = string.find(text, "РЫВОК", 1, true) ~= nil or string.find(text, "ускор", 1, true) ~= nil
-		local title = if dash then "РЫВОК" else "ЩИТ"
-		local tone = if dash then Color3.fromRGB(255, 150, 60) else Color3.fromRGB(112, 176, 255)
-		Effects.play("bonus", if dash then 1.18 else 1)
-		showBanner(title, text, tone, 2.4)
+	local spawnNote = string.find(text, "подбери", 1, true) ~= nil
+	if kind ~= "out" and not spawnNote then
+		return
 	end
-	local labels = 0
+	local dash = string.find(text, "молни", 1, true) ~= nil
+	local accent = if kind == "out"
+		then Color3.fromRGB(255, 96, 112)
+		elseif dash then Color3.fromRGB(255, 168, 64)
+		else Color3.fromRGB(96, 186, 255)
+	local item = Instance.new("Frame")
+	item.Name = "Note"
+	item.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+	item.BackgroundTransparency = 0.08
+	item.BorderSizePixel = 0
+	item.Size = UDim2.fromOffset(340, 40)
+	item.LayoutOrder = os.clock() * 1000
+	item.Parent = feed
+	corner(item, 8)
+	local bar = Instance.new("Frame")
+	bar.Name = "Accent"
+	bar.BackgroundColor3 = accent
+	bar.BorderSizePixel = 0
+	bar.Size = UDim2.new(0, 6, 1, 0)
+	bar.Parent = item
+	local caption = Instance.new("TextLabel")
+	caption.Name = "Caption"
+	caption.BackgroundTransparency = 1
+	caption.Position = UDim2.fromOffset(18, 0)
+	caption.Size = UDim2.new(1, -28, 1, 0)
+	caption.Font = Enum.Font.GothamBlack
+	caption.TextSize = 16
+	caption.TextXAlignment = Enum.TextXAlignment.Left
+	caption.TextYAlignment = Enum.TextYAlignment.Center
+	caption.TextTruncate = Enum.TextTruncate.AtEnd
+	caption.TextWrapped = false
+	caption.TextStrokeTransparency = 1
+	caption.TextColor3 = Color3.fromRGB(244, 246, 252)
+	caption.Text = text
+	caption.Parent = item
+	if spawnNote then
+		local title = if dash then "Рывок" else "Щит"
+		Effects.play("bonus")
+		showBanner(title, text, accent, 2.2)
+	end
+	local notes = 0
 	for _, child in feed:GetChildren() do
-		if child:IsA("TextLabel") then
-			labels += 1
+		if child.Name == "Note" then
+			notes += 1
 		end
 	end
-	while labels > 3 do
+	while notes > 3 do
 		local oldest
 		for _, child in feed:GetChildren() do
-			if child:IsA("TextLabel") and (not oldest or child.LayoutOrder < oldest.LayoutOrder) then
+			if child.Name == "Note" and (not oldest or child.LayoutOrder < oldest.LayoutOrder) then
 				oldest = child
 			end
 		end
 		if oldest then
 			oldest:Destroy()
-			labels -= 1
+			notes -= 1
 		else
 			break
 		end
 	end
 	task.delay(6, function()
 		if item.Parent then
-			TweenService:Create(item, TweenInfo.new(0.5), { BackgroundTransparency = 1, TextTransparency = 1 }):Play()
-			task.wait(0.5)
+			TweenService:Create(item, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(caption, TweenInfo.new(0.35), { TextTransparency = 1 }):Play()
+			TweenService:Create(bar, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+			task.wait(0.35)
 			item:Destroy()
 		end
 	end)

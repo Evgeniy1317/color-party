@@ -3,9 +3,11 @@
 -- две жизни, обманки, сжатие арены, монеты, бонусы, итоги.
 
 local Players = game:GetService("Players")
+local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
@@ -17,6 +19,47 @@ local A = Config.ARENA
 local IDLE_GLOW = Color3.fromRGB(196, 186, 255)
 local GOLD = Color3.fromRGB(255, 206, 84)
 
+local function playerGroup(player: Player): string
+	return "CP" .. player.UserId
+end
+
+local function catchGroup(player: Player): string
+	return "CC" .. player.UserId
+end
+
+local function ensureGroups(player: Player)
+	local pg, cg = playerGroup(player), catchGroup(player)
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup(pg)
+	end)
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup(cg)
+	end)
+	PhysicsService:CollisionGroupSetCollidable(cg, "Default", false)
+	PhysicsService:CollisionGroupSetCollidable(pg, "Default", true)
+	for _, other in Players:GetPlayers() do
+		local otherGroup = playerGroup(other)
+		local otherCatch = catchGroup(other)
+		pcall(function()
+			PhysicsService:RegisterCollisionGroup(otherGroup)
+		end)
+		pcall(function()
+			PhysicsService:RegisterCollisionGroup(otherCatch)
+		end)
+		PhysicsService:CollisionGroupSetCollidable(cg, otherGroup, other == player)
+		PhysicsService:CollisionGroupSetCollidable(pg, otherCatch, other == player)
+	end
+end
+
+local function tagCharacter(player: Player, character: Model)
+	local pg = playerGroup(player)
+	for _, desc in character:GetDescendants() do
+		if desc:IsA("BasePart") then
+			desc.CollisionGroup = pg
+		end
+	end
+end
+
 export type Participant = {
 	player: Player,
 	alive: boolean,
@@ -27,6 +70,16 @@ export type Participant = {
 	shield: boolean,
 	place: number?, -- порядок выбывания (1 = выбыл первым)
 	left: boolean,
+	catchPad: BasePart?,
+	shieldPad: BasePart?,
+	spawnPad: BasePart?,
+	arrived: boolean,
+	stable: boolean,
+	placedAt: number,
+	shieldAt: number,
+	dashUntil: number,
+	lastSafe: Vector3?,
+	catchHold: number,
 }
 
 local MatchController = {}
@@ -205,7 +258,7 @@ end
 -- Плиты нужного цвета остаются на обоих этажах. Остальные пропадают.
 function MatchController:dropTiles(rule: RoundRules.Rule, protected: { [BasePart]: boolean })
 	local function stays(tile: BasePart): boolean
-		if protected[tile] then
+		if protected[tile] or tile:GetAttribute("ShieldHeld") == true then
 			return true
 		end
 		local id = tile:GetAttribute("ColorId")
@@ -266,7 +319,14 @@ function MatchController:dropTiles(rule: RoundRules.Rule, protected: { [BasePart
 			end
 			local alpha = step / steps
 			for _, tile in falling do
-				if tile.Parent then
+				if tile.Parent and tile:GetAttribute("ShieldHeld") == true then
+					local home = tile:GetAttribute("HomeCF")
+					if typeof(home) == "CFrame" then
+						tile.CFrame = home
+					end
+					tile.CanCollide = true
+					tile.Transparency = 0
+				elseif tile.Parent then
 					local home = tile:GetAttribute("HomeCF")
 					if typeof(home) == "CFrame" then
 						tile.CFrame = home * CFrame.new(0, -18 * alpha, 0)
@@ -294,7 +354,10 @@ function MatchController:restoreTiles()
 		end
 		tile.CanCollide = true
 		tile.Transparency = 0
+		tile:SetAttribute("ShieldHeld", nil)
 	end
+	self:clearCatchPads()
+	self:clearShieldPads()
 end
 
 function MatchController:shrink(count: number)
@@ -363,23 +426,14 @@ function MatchController:participantOf(player: Player): Participant?
 	return nil
 end
 
-local function sparkle(target: BasePart, color: Color3)
-	local emitter = Instance.new("ParticleEmitter")
-	emitter.Color = ColorSequence.new(color)
-	emitter.LightEmission = 0.6
-	emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0) })
-	emitter.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
-	emitter.Lifetime = NumberRange.new(0.5, 0.9)
-	emitter.Rate = 14
-	emitter.Speed = NumberRange.new(1, 2)
-	emitter.SpreadAngle = Vector2.new(180, 180)
-	emitter.Parent = target
-end
-
-function MatchController:randomUpperTiles(count: number): { BasePart }
+function MatchController:randomFloorTiles(floorName: string, count: number): { BasePart }
+	local holder = self.arena:FindFirstChild(floorName)
+	if not holder then
+		return {}
+	end
 	local list = {}
-	for _, tile in TileLayout.tiles(self.arena:WaitForChild("Upper")) do
-		if not tile:GetAttribute("Hub") then
+	for _, tile in TileLayout.tiles(holder) do
+		if tile:GetAttribute("Hub") ~= true then
 			table.insert(list, tile)
 		end
 	end
@@ -394,72 +448,362 @@ function MatchController:randomUpperTiles(count: number): { BasePart }
 	return chosen
 end
 
-local function pickupLabel(part: BasePart, text: string, color: Color3)
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "Tag"
-	gui.Size = UDim2.fromOffset(90, 36)
-	gui.StudsOffset = Vector3.new(0, 2.4, 0)
-	gui.AlwaysOnTop = true
-	gui.MaxDistance = 220
-	gui.Parent = part
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.GothamBlack
-	label.TextSize = 22
-	label.Text = text
-	label.TextColor3 = color
-	label.TextStrokeColor3 = Color3.fromRGB(20, 16, 28)
-	label.TextStrokeTransparency = 0.25
-	label.Parent = gui
+local function dressPart(part: BasePart)
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	part.Massless = true
+	part.Anchored = false
 end
 
-function MatchController:takePickup(item: BasePart, p: Participant)
+function MatchController:showShieldRing(p: Participant)
+	local character = p.player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not character or not root or not root:IsA("BasePart") then
+		return
+	end
+	self:clearShieldRing(p)
+	local bubble = Instance.new("Part")
+	bubble.Name = "ShieldRing"
+	bubble.Shape = Enum.PartType.Ball
+	bubble.Size = Vector3.new(7.2, 7.2, 7.2)
+	bubble.Color = Color3.fromRGB(110, 186, 255)
+	bubble.Material = Enum.Material.ForceField
+	bubble.Transparency = 0.25
+	dressPart(bubble)
+	bubble.CFrame = root.CFrame * CFrame.new(0, 0.2, 0)
+	bubble.Parent = character
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = root
+	weld.Part1 = bubble
+	weld.Parent = bubble
+end
+
+function MatchController:poseShield(_root: BasePart, _now: number)
+end
+
+function MatchController:clearShieldRing(p: Participant)
+	local character = p.player.Character
+	if not character then
+		return
+	end
+	local ring = character:FindFirstChild("ShieldRing")
+	if ring then
+		ring:Destroy()
+	end
+	local aura = character:FindFirstChild("ShieldAura")
+	if aura then
+		aura:Destroy()
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	local glow = root and root:FindFirstChild("ShieldGlow")
+	if glow then
+		glow:Destroy()
+	end
+end
+
+function MatchController:playerFloorY(p: Participant, rootY: number): number
+	local upperTop = self.upperY + A.TILE_THICKNESS * 0.5
+	local lowerTop = self.lowerY + A.TILE_THICKNESS * 0.5
+	if math.abs(rootY - upperTop) <= 18 then
+		return self.upperY
+	end
+	if math.abs(rootY - lowerTop) <= 18 then
+		return self.lowerY
+	end
+	return if p.floor == "lower" then self.lowerY else self.upperY
+end
+
+function MatchController:tilesNear(origin: Vector3, floorY: number, radius: number): { BasePart }
+	local found = {}
+	local limit = radius * radius
+	for _, tile in self:tiles() do
+		local home = tile:GetAttribute("HomeCF")
+		local pos = if typeof(home) == "CFrame" then home.Position else tile.Position
+		if math.abs(pos.Y - floorY) > 3 then
+			continue
+		end
+		local dx = origin.X - pos.X
+		local dz = origin.Z - pos.Z
+		if dx * dx + dz * dz <= limit then
+			table.insert(found, tile)
+		end
+	end
+	return found
+end
+
+function MatchController:floorSupported(origin: Vector3, floorY: number): boolean
+	local under: BasePart? = nil
+	local best = math.huge
+	for _, tile in self:tilesNear(origin, floorY, 8) do
+		local home = tile:GetAttribute("HomeCF")
+		local pos = if typeof(home) == "CFrame" then home.Position else tile.Position
+		local dx = origin.X - pos.X
+		local dz = origin.Z - pos.Z
+		if math.abs(dx) <= tile.Size.X * 0.5 and math.abs(dz) <= tile.Size.Z * 0.5 then
+			local dist = dx * dx + dz * dz
+			if dist < best then
+				best = dist
+				under = tile
+			end
+		end
+	end
+	return under ~= nil and under.CanCollide
+end
+
+function MatchController:standingIsSafe(root: BasePart, rule: RoundRules.Rule, floorY: number): boolean
+	local near = self:tilesNear(root.Position, floorY, 7)
+	if #near == 0 then
+		return true
+	end
+	for _, tile in near do
+		local id = tile:GetAttribute("ColorId")
+		if not RoundRules.isSafe(rule, if typeof(id) == "string" then id else nil, false) then
+			return false
+		end
+	end
+	return true
+end
+
+function MatchController:holdIsland(origin: Vector3, floorY: number, protected: { [BasePart]: boolean }?)
+	for _, tile in self:tilesNear(origin, floorY, 15) do
+		if protected then
+			protected[tile] = true
+		end
+		tile:SetAttribute("ShieldHeld", true)
+		local home = tile:GetAttribute("HomeCF")
+		if typeof(home) ~= "CFrame" then
+			tile:SetAttribute("HomeCF", tile.CFrame)
+			home = tile.CFrame
+		end
+		if typeof(home) == "CFrame" then
+			tile.CFrame = home
+		end
+		tile.CanCollide = true
+		tile.Transparency = 0
+	end
+end
+
+function MatchController:giveShieldPad(p: Participant, root: BasePart, floorY: number, spot: Vector3?)
+	local at = spot or root.Position
+	local top = floorY + A.TILE_THICKNESS * 0.5 - 0.15
+	local pad = p.shieldPad
+	if not pad or not pad.Parent then
+		pad = Instance.new("Part")
+		pad.Name = "ShieldPad"
+		pad.Size = Vector3.new(18, 2, 18)
+		pad.Anchored = true
+		pad.CanCollide = true
+		pad.CanQuery = false
+		pad.CanTouch = false
+		pad.Transparency = 1
+		pad.CastShadow = false
+		pad.CollisionGroup = "Default"
+		pad.Parent = self.arena
+		p.shieldPad = pad
+	end
+	pad.CollisionGroup = "Default"
+	pad.CanCollide = true
+	pad.CFrame = CFrame.new(at.X, top - 1, at.Z)
+end
+
+function MatchController:clearShieldPads()
+	for _, p in self.participants do
+		if p.shieldPad then
+			p.shieldPad:Destroy()
+			p.shieldPad = nil
+		end
+	end
+	if self.arena then
+		for _, child in self.arena:GetChildren() do
+			if child.Name == "ShieldPad" then
+				child:Destroy()
+			end
+		end
+	end
+end
+
+function MatchController:spendShield(p: Participant, root: BasePart, floorY: number, protected: { [BasePart]: boolean }?, placeAt: Vector3?)
+	if not p.shield then
+		return
+	end
+	p.shield = false
+	p.player:SetAttribute("Shield", nil)
+	local spot = placeAt or root.Position
+	self:holdIsland(spot, floorY, protected)
+	self:giveShieldPad(p, root, floorY, spot)
+	local character = p.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local hip = if humanoid then humanoid.HipHeight else 2
+	local stand = floorY + A.TILE_THICKNESS * 0.5 + hip + root.Size.Y * 0.5 + 0.2
+	local away = (Vector3.new(root.Position.X - spot.X, 0, root.Position.Z - spot.Z)).Magnitude
+	if character and (root.Position.Y < stand - 1.2 or away > 2.5) then
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		character:PivotTo(CFrame.new(spot.X, stand, spot.Z) * (root.CFrame - root.Position))
+	end
+	self:clearShieldRing(p)
+end
+
+function MatchController:showDashTrail(p: Participant)
+	local root = p.player.Character and p.player.Character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return
+	end
+	local previous = root:FindFirstChild("DashTrail")
+	if previous then
+		previous:Destroy()
+	end
+	local top = Instance.new("Attachment")
+	top.Name = "DashTop"
+	top.Position = Vector3.new(0, 0.9, 0.5)
+	top.Parent = root
+	local bottom = Instance.new("Attachment")
+	bottom.Name = "DashBottom"
+	bottom.Position = Vector3.new(0, -1.2, 0.5)
+	bottom.Parent = root
+	local trail = Instance.new("Trail")
+	trail.Name = "DashTrail"
+	trail.Attachment0 = top
+	trail.Attachment1 = bottom
+	trail.Lifetime = 0.5
+	trail.MinLength = 0.05
+	trail.FaceCamera = true
+	trail.LightEmission = 0.3
+	trail.Color = ColorSequence.new(Color3.fromRGB(255, 196, 90), Color3.fromRGB(255, 120, 40))
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	trail.WidthScale = NumberSequence.new(1, 0.15)
+	trail.Parent = root
+	task.delay(3.5, function()
+		trail:Destroy()
+		top:Destroy()
+		bottom:Destroy()
+	end)
+end
+
+local PICKUP_LOOK = {
+	Coin = { spin = 140, lift = 2.6, scale = 2.6 },
+	Shield = { spin = 46, lift = 3.2, scale = 3.5 },
+	Dash = { spin = 80, lift = 3.4, scale = 4.4 },
+}
+
+function MatchController:takePickup(item: Instance, p: Participant)
 	if item:GetAttribute("Taken") or not p.alive then
 		return
 	end
 	item:SetAttribute("Taken", true)
 	local kind = item:GetAttribute("Pickup")
 	if kind == "Coin" then
-		Economy.addCoins(p.player, Config.COIN_VALUE, "coin")
+		Economy.addCoins(p.player, 10, "coin")
 	elseif kind == "Shield" then
 		p.shield = true
 		p.player:SetAttribute("Shield", true)
-		self:feed(p.player.DisplayName .. " взял щит", "bonus")
+		local root = p.player.Character and p.player.Character:FindFirstChild("HumanoidRootPart")
+		p.shieldAt = os.clock()
+		if root and root:IsA("BasePart") then
+			p.lastSafe = root.Position
+			self:giveShieldPad(p, root, self:playerFloorY(p, root.Position.Y), root.Position)
+		end
+		self:showShieldRing(p)
 	elseif kind == "Dash" then
 		local humanoid = p.player.Character and p.player.Character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
+			p.dashUntil = os.clock() + 3.5
 			humanoid.WalkSpeed = 27
+			self:showDashTrail(p)
+			if p.shield then
+				self:showShieldRing(p)
+			end
 			task.delay(3.5, function()
 				if humanoid.Parent then
 					humanoid.WalkSpeed = 16
 				end
 			end)
 		end
-		self:feed(p.player.DisplayName .. " ускорился", "bonus")
 	end
 	item:Destroy()
 end
 
+function MatchController:spawnPickup(kind: string, worldPos: Vector3)
+	local look = PICKUP_LOOK[kind]
+	local templates = ServerStorage:FindFirstChild("PickupModels")
+	local source = templates and templates:FindFirstChild(kind)
+	if not source or not source:IsA("Model") or not look then
+		return
+	end
+	local model = source:Clone()
+	for _, desc in model:GetDescendants() do
+		if desc:IsA("LuaSourceContainer") or desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") then
+			desc:Destroy()
+		end
+	end
+	model.Parent = self:pickupFolder()
+	local size = model:GetExtentsSize()
+	local largest = math.max(size.X, size.Y, size.Z, 0.05)
+	model:ScaleTo(look.scale / largest)
+	size = model:GetExtentsSize()
+	local cf = CFrame.new(worldPos + Vector3.new(0, look.lift, 0))
+	if size.Z < size.X * 0.45 and size.Z < size.Y * 0.45 then
+		cf *= CFrame.Angles(math.rad(90), 0, 0)
+	end
+	model:PivotTo(cf)
+	model.Name = kind
+	model:SetAttribute("Pickup", kind)
+	model:SetAttribute("BaseCF", model:GetPivot())
+	model:SetAttribute("Spin", look.spin)
+	local host: BasePart? = nil
+	for _, desc in model:GetDescendants() do
+		if desc:IsA("BasePart") then
+			desc.Anchored = true
+			desc.CanCollide = false
+			desc.CanTouch = false
+			desc.CanQuery = false
+			if not host then
+				host = desc
+			end
+		end
+	end
+	if host then
+		local arrow = Instance.new("BillboardGui")
+		arrow.Name = "Arrow"
+		arrow.Size = UDim2.fromOffset(26, 26)
+		arrow.StudsOffset = Vector3.new(0, 2.2, 0)
+		arrow.AlwaysOnTop = false
+		arrow.MaxDistance = 90
+		arrow.LightInfluence = 0
+		arrow.Adornee = host
+		arrow.Parent = host
+		local mark = Instance.new("TextLabel")
+		mark.BackgroundTransparency = 1
+		mark.Size = UDim2.fromScale(1, 1)
+		mark.Font = Enum.Font.BuilderSansBold
+		mark.TextScaled = true
+		mark.Text = if kind == "Coin" then "10" else "▼"
+		mark.TextColor3 = if kind == "Coin" then GOLD elseif kind == "Shield" then Color3.fromRGB(120, 186, 255) else Color3.fromRGB(255, 170, 70)
+		mark.Parent = arrow
+	end
+end
+
 function MatchController:spawnCoins()
 	local folder = self:pickupFolder()
+	local existing = 0
+	for _, child in folder:GetChildren() do
+		if child:GetAttribute("Pickup") == "Coin" then
+			existing += 1
+		end
+	end
+	if existing >= 18 then
+		return
+	end
 	local count = self.rng:NextInteger(Config.COINS_ON_FIELD[1], Config.COINS_ON_FIELD[2])
-	for _, tile in self:randomUpperTiles(count) do
-		local coin = Instance.new("Part")
-		coin.Name = "Coin"
-		coin.Shape = Enum.PartType.Cylinder
-		coin.Size = Vector3.new(0.45, 3.6, 3.6)
-		coin.Color = GOLD
-		coin.Material = Enum.Material.SmoothPlastic
-		coin.Anchored = true
-		coin.CanCollide = false
-		coin.CanTouch = true
-		coin.CFrame = CFrame.new(tile.Position + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90))
-		coin:SetAttribute("Spin", 160)
-		coin:SetAttribute("Pickup", "Coin")
-		sparkle(coin, GOLD)
-		pickupLabel(coin, "МОНЕТА", GOLD)
-		coin.Parent = folder
+	for _, floorName in { "Upper", "Lower" } do
+		for _, tile in self:randomFloorTiles(floorName, count) do
+			self:spawnPickup("Coin", tile.Position)
+		end
 	end
 end
 
@@ -467,29 +811,18 @@ function MatchController:spawnBonus()
 	if self.round < Config.BONUS_FROM_ROUND or self.rng:NextNumber() > Config.BONUS_CHANCE then
 		return
 	end
-	local tiles = self:randomUpperTiles(1)
-	if #tiles == 0 then
-		return
-	end
 	local kind = if self.rng:NextNumber() < 0.5 then "Shield" else "Dash"
-	local color = if kind == "Shield" then Color3.fromRGB(112, 176, 255) else Color3.fromRGB(255, 150, 60)
-	local title = if kind == "Shield" then "ЩИТ" else "РЫВОК"
-	local orb = Instance.new("Part")
-	orb.Name = kind
-	orb.Shape = Enum.PartType.Ball
-	orb.Size = Vector3.new(3.4, 3.4, 3.4)
-	orb.Color = color
-	orb.Material = Enum.Material.SmoothPlastic
-	orb.Anchored = true
-	orb.CanCollide = false
-	orb.CanTouch = true
-	orb.CFrame = CFrame.new(tiles[1].Position + Vector3.new(0, 4, 0))
-	orb:SetAttribute("Bob", 2.2)
-	orb:SetAttribute("Pickup", kind)
-	sparkle(orb, color)
-	pickupLabel(orb, title, color)
-	orb.Parent = self:pickupFolder()
-	self:feed(if kind == "Shield" then "На поле появился ЩИТ!" else "На поле появился РЫВОК!", "bonus")
+	local spawned = false
+	for _, floorName in { "Upper", "Lower" } do
+		local tiles = self:randomFloorTiles(floorName, 1)
+		if tiles[1] then
+			self:spawnPickup(kind, tiles[1].Position)
+			spawned = true
+		end
+	end
+	if spawned then
+		self:feed(if kind == "Shield" then "На арене щит — подбери его" else "На арене рывок — подбери молнию", "bonus")
+	end
 end
 
 -- Игроки -------------------------------------------------------------------
@@ -504,7 +837,30 @@ local function lobbySpawn(): CFrame
 	return CFrame.new(0, 64, -180)
 end
 
+local function clearWornEffects(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	for _, name in { "ShieldRing", "ShieldAura" } do
+		local item = character:FindFirstChild(name)
+		if item then
+			item:Destroy()
+		end
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root then
+		for _, name in { "DashTrail", "DashTop", "DashBottom", "ShieldGlow" } do
+			local item = root:FindFirstChild(name)
+			if item then
+				item:Destroy()
+			end
+		end
+	end
+end
+
 local function toLobby(player: Player)
+	clearWornEffects(player)
 	local character = player.Character
 	if character then
 		character:PivotTo(lobbySpawn())
@@ -530,6 +886,11 @@ function MatchController:eliminate(p: Participant, reason: string)
 	p.streak = 0
 	self.eliminatedCount += 1
 	p.place = self.eliminatedCount
+	if p.shieldPad then
+		p.shieldPad:Destroy()
+		p.shieldPad = nil
+	end
+	self:clearShieldRing(p)
 	self:clearPlayerState(p.player)
 	if not p.left then
 		self.spectators[p.player] = true
@@ -547,47 +908,182 @@ function MatchController:eliminate(p: Participant, reason: string)
 	end
 end
 
+function MatchController:plantOnLower(p: Participant, root: BasePart)
+	local character = root.Parent
+	if not character or not character:IsA("Model") then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local hip = if humanoid then humanoid.HipHeight else 2
+	local stand = self.lowerY + A.TILE_THICKNESS * 0.5 + hip + root.Size.Y * 0.5 + 0.35
+	local half = A.LOWER_RADIUS - 8
+	local x = math.clamp(root.Position.X, self.center.X - half, self.center.X + half)
+	local z = math.clamp(root.Position.Z, self.center.Z - half, self.center.Z + half)
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	character:PivotTo(CFrame.new(x, stand, z) * (root.CFrame - root.Position))
+	if os.clock() < p.catchHold then
+		return
+	end
+	p.catchHold = os.clock() + 0.5
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
+	task.delay(0.55, function()
+		if root.Parent and p.alive and os.clock() >= p.catchHold then
+			pcall(function()
+				root:SetNetworkOwner(p.player)
+			end)
+		end
+	end)
+end
+
+function MatchController:beginCatch(p: Participant, root: BasePart)
+	if p.catchPad and p.catchPad.Parent then
+		return
+	end
+	p.floor = "lower"
+	p.lives = 1
+	p.streak = 0
+	p.catchHold = 0
+	p.player:SetAttribute("Lives", 1)
+	p.player:SetAttribute("Streak", 0)
+	self:feed(p.player.DisplayName .. " упал на нижний этаж!", "fall")
+	ensureGroups(p.player)
+	PhysicsService:CollisionGroupSetCollidable(playerGroup(p.player), catchGroup(p.player), true)
+	if p.player.Character then
+		tagCharacter(p.player, p.player.Character)
+	end
+	-- Поле на весь нижний этаж: дыры в плитах не пробивают вторую жизнь в том же падении.
+	local thickness = 8
+	local top = self.lowerY + A.TILE_THICKNESS * 0.5
+	local pad = Instance.new("Part")
+	pad.Name = "CatchPad"
+	pad.Size = Vector3.new(A.LOWER_RADIUS * 2 - 6, thickness, A.LOWER_RADIUS * 2 - 6)
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.CanQuery = false
+	pad.CanTouch = false
+	pad.Transparency = 1
+	pad.CastShadow = false
+	pad.CFrame = CFrame.new(self.center.X, top - thickness * 0.5, self.center.Z)
+	pad.Parent = self.arena
+	pad.CollisionGroup = catchGroup(p.player)
+	p.catchPad = pad
+	if root.Position.Y < self.lowerY + 1 then
+		self:plantOnLower(p, root)
+	end
+end
+
+function MatchController:clearCatchPads()
+	for _, p in self.participants do
+		if p.catchPad then
+			p.catchPad:Destroy()
+			p.catchPad = nil
+		end
+	end
+end
+
 function MatchController:watch()
-	-- Следим за высотой: верхний этаж → нижний = минус жизнь; ниже нижнего = выбыл.
+	-- Первое падение снимает одну жизнь и ловит игрока личной площадкой.
+	-- Второе падение ниже нижнего этажа выбивает из матча.
 	table.insert(self.connections, RunService.Heartbeat:Connect(function()
+		local now = os.clock()
 		for _, p in self.participants do
 			if not p.alive then
 				continue
 			end
 			local character = p.player.Character
 			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if not p.arrived then
+				self:placeOnArena(p)
+				continue
+			end
 			if not root or not root:IsA("BasePart") then
 				continue
 			end
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 			if not humanoid or humanoid.Health <= 0 then
-				self:eliminate(p, "died")
+				if not p.stable then
+					p.arrived = false
+				else
+					self:eliminate(p, "died")
+				end
 				continue
 			end
 			local y = root.Position.Y
 			local dx = math.abs(root.Position.X - self.center.X)
 			local dz = math.abs(root.Position.Z - self.center.Z)
-			-- Респавн в лобби или вылет за квадрат: матч для этого игрока закончен.
-			if dx > A.LOWER_RADIUS + 36 or dz > A.LOWER_RADIUS + 36 then
-				self:eliminate(p, "fell")
+			if p.arrived and p.placedAt > 0 and os.clock() - p.placedAt >= 4 and dx <= A.LOWER_RADIUS + 24 and dz <= A.LOWER_RADIUS + 24 then
+				p.stable = true
+			end
+			if (dx > A.LOWER_RADIUS + 36 or dz > A.LOWER_RADIUS + 36) then
+				if not p.stable then
+					p.arrived = false
+				else
+					self:eliminate(p, "fell")
+				end
 				continue
 			end
-			if p.floor == "upper" and y < (self.upperY + self.lowerY) / 2 then
-				p.floor = "lower"
-				p.lives = 1
-				p.streak = 0
-				p.player:SetAttribute("Lives", 1)
-				p.player:SetAttribute("Streak", 0)
-				self:feed(p.player.DisplayName .. " упал на нижний этаж!", "fall")
+			self:poseShield(root, now)
+			local savedByShield = false
+			if p.shield then
+				local floorY = self:playerFloorY(p, y)
+				local top = floorY + A.TILE_THICKNESS * 0.5
+				local supported = self:floorSupported(root.Position, floorY)
+				if supported and y >= top - 1.5 then
+					p.lastSafe = Vector3.new(root.Position.X, floorY, root.Position.Z)
+				end
+				local spot = root.Position
+				local back = p.lastSafe
+				if not supported and back then
+					local hopX = root.Position.X - back.X
+					local hopZ = root.Position.Z - back.Z
+					if hopX * hopX + hopZ * hopZ > 40 * 40 then
+						spot = Vector3.new(back.X, root.Position.Y, back.Z)
+					end
+				end
+				self:giveShieldPad(p, root, floorY, spot)
+				-- Рывок не тратит щит. Щит сгорает только от настоящей дыры под ногами.
+				if not supported and now >= p.dashUntil then
+					self:spendShield(p, root, floorY, nil, spot)
+					savedByShield = true
+				elseif not supported then
+					savedByShield = true
+				end
 			end
-			if y < self.lowerY - A.FALL_LIMIT then
-				self:eliminate(p, "fell")
-				continue
+			if not savedByShield then
+				if p.floor == "upper" and y < self.upperY - 8 then
+					if root.AssemblyLinearVelocity.Y < -42 then
+						root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -42, root.AssemblyLinearVelocity.Z)
+					end
+					self:beginCatch(p, root)
+				end
+				local pad = p.catchPad
+				if pad and pad.Parent then
+					-- Поле держит до конца раунда. Сквозь него жизнь больше не снимается.
+					if y < self.lowerY + 1 then
+						self:plantOnLower(p, root)
+					end
+				elseif y < self.lowerY - A.FALL_LIMIT then
+					self:eliminate(p, "fell")
+					continue
+				end
 			end
 			local pickups = self.arena:FindFirstChild("Pickups")
 			if pickups then
 				for _, item in pickups:GetChildren() do
-					if item:IsA("BasePart") and not item:GetAttribute("Taken") and (item.Position - root.Position).Magnitude <= 7 then
+					if item:GetAttribute("Taken") then
+						continue
+					end
+					local base = item:GetAttribute("BaseCF")
+					local spin = item:GetAttribute("Spin")
+					if item:IsA("Model") and typeof(base) == "CFrame" and typeof(spin) == "number" then
+						local bob = math.sin(now * 2.2 + base.Position.X * 0.2) * 0.35
+						item:PivotTo(CFrame.new(base.Position + Vector3.new(0, bob, 0)) * CFrame.Angles(0, math.rad(spin * now), 0) * (base - base.Position))
+					end
+					local pos = if item:IsA("Model") then item:GetPivot().Position elseif item:IsA("BasePart") then item.Position else nil
+					if pos and (pos - root.Position).Magnitude <= 7 then
 						self:takePickup(item, p)
 					end
 				end
@@ -607,11 +1103,59 @@ end
 function MatchController:hookCharacter(p: Participant)
 	local character = p.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		table.insert(self.connections, humanoid.Died:Connect(function()
-			self:eliminate(p, "died")
-		end))
+	if not humanoid or humanoid.Health <= 0 then
+		return
 	end
+	table.insert(self.connections, humanoid.Died:Connect(function()
+		if not p.alive then
+			return
+		end
+		if not p.stable then
+			p.arrived = false
+			return
+		end
+		self:eliminate(p, "died")
+	end))
+end
+
+function MatchController:placeOnArena(p: Participant): boolean
+	if p.arrived then
+		return true
+	end
+	local pad = p.spawnPad
+	local character = p.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not pad or not character or not humanoid or not root or not root:IsA("BasePart") or humanoid.Health <= 0 then
+		return false
+	end
+	if humanoid:GetState() == Enum.HumanoidStateType.Dead then
+		return false
+	end
+	ensureGroups(p.player)
+	tagCharacter(p.player, character)
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+	character:PivotTo(pad.CFrame + Vector3.new(0, 3, 0))
+	local field = Instance.new("ForceField")
+	field.Visible = true
+	field.Parent = character
+	task.delay(Config.PREPARE_TIME, function()
+		if field.Parent then
+			field:Destroy()
+		end
+	end)
+	p.arrived = true
+	p.stable = false
+	p.placedAt = os.clock()
+	p.floor = "upper"
+	p.lives = Config.LIVES
+	p.player:SetAttribute("Lives", Config.LIVES)
+	self:hookCharacter(p)
+	if p.shield then
+		self:showShieldRing(p)
+	end
+	return true
 end
 
 function MatchController:teleportIn()
@@ -621,29 +1165,36 @@ function MatchController:teleportIn()
 	end)
 	for index, p in self.participants do
 		local pad = spawns[((index - 1) % #spawns) + 1]
-		local character = p.player.Character
-		if character and pad:IsA("BasePart") then
-			character:PivotTo(pad.CFrame + Vector3.new(0, 2.5, 0))
-			local field = Instance.new("ForceField")
-			field.Visible = true
-			field.Parent = character
-			task.delay(Config.PREPARE_TIME, function()
-				field:Destroy()
-			end)
+		if pad:IsA("BasePart") then
+			p.spawnPad = pad
 		end
 		p.player:SetAttribute("InMatch", self.slot)
 		p.player:SetAttribute("Lives", Config.LIVES)
 		p.player:SetAttribute("Streak", 0)
 		p.player:SetAttribute("Shield", nil)
-		self:hookCharacter(p)
-		-- Смерть и респавн не возвращают в матч: новый персонаж — это уже вылет.
+		self:placeOnArena(p)
 		table.insert(self.connections, p.player.CharacterAdded:Connect(function()
 			if self.state ~= "running" and self.state ~= "results" then
 				return
 			end
-			if p.alive then
-				self:eliminate(p, "died")
+			if not p.alive then
+				task.defer(function()
+					if p.player.Parent then
+						toLobby(p.player)
+					end
+				end)
+				return
 			end
+			if not p.stable then
+				p.arrived = false
+				task.defer(function()
+					if p.alive then
+						self:placeOnArena(p)
+					end
+				end)
+				return
+			end
+			self:eliminate(p, "died")
 			task.defer(function()
 				if p.player.Parent then
 					toLobby(p.player)
@@ -666,18 +1217,26 @@ function MatchController:start(players: { Player })
 	self.spectators = {}
 	self.palette = RoundRules.matchPalette(self.rng)
 	for _, player in players do
-		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-			table.insert(self.participants, {
-				player = player,
-				alive = true,
-				floor = "upper",
-				lives = Config.LIVES,
-				streak = 0,
-				rounds = 0,
-				shield = false,
-				left = false,
-			})
-		end
+		table.insert(self.participants, {
+			player = player,
+			alive = true,
+			floor = "upper",
+			lives = Config.LIVES,
+			streak = 0,
+			rounds = 0,
+			shield = false,
+			left = false,
+			catchPad = nil,
+			shieldPad = nil,
+			spawnPad = nil,
+			arrived = false,
+			stable = false,
+			placedAt = 0,
+			shieldAt = 0,
+			dashUntil = 0,
+			lastSafe = nil,
+			catchHold = 0,
+		})
 	end
 	if #self.participants == 0 then
 		self.state = "idle"
@@ -752,7 +1311,7 @@ function MatchController:paintRound(rule: RoundRules.Rule)
 				safe += 1
 			end
 		end
-		local need = math.max(8, math.floor(#tiles * 0.35))
+		local need = math.max(8, math.floor(#tiles * 0.22))
 		local id = rule.targets[1]
 		local def = id and Config.COLOR_BY_ID[id]
 		if def then
@@ -779,8 +1338,11 @@ function MatchController:paintRound(rule: RoundRules.Rule)
 			end
 			tile.CanCollide = true
 			tile.Transparency = 0
+			tile:SetAttribute("ShieldHeld", nil)
 		end
 	end
+	self:clearCatchPads()
+	self:clearShieldPads()
 end
 
 function MatchController:run()
@@ -840,11 +1402,8 @@ function MatchController:run()
 			task.wait(rule.time)
 		end
 
-		-- Остаются только плиты цветов из задания. Щит сохраняет одну плиту под ногами.
+		-- Щит оставляет островок под ногами и личную площадку, даже если поиск одной плиты промахнулся.
 		local protected: { [BasePart]: boolean } = {}
-		local params = RaycastParams.new()
-		params.FilterType = Enum.RaycastFilterType.Include
-		params.FilterDescendantsInstances = { self.arena:WaitForChild("Upper"), self.arena:WaitForChild("Lower") }
 		for _, p in self:aliveList() do
 			if not p.shield then
 				continue
@@ -853,16 +1412,9 @@ function MatchController:run()
 			if not root or not root:IsA("BasePart") then
 				continue
 			end
-			local hit = workspace:Raycast(root.Position, Vector3.new(0, -25, 0), params)
-			local tile = hit and hit.Instance
-			if tile and tile:IsA("BasePart") then
-				local id = tile:GetAttribute("ColorId")
-				if not RoundRules.isSafe(rule, if typeof(id) == "string" then id else nil, false) then
-					protected[tile] = true
-					p.shield = false
-					p.player:SetAttribute("Shield", nil)
-					self:feed("Щит спас " .. p.player.DisplayName .. "!", "bonus")
-				end
+			local floorY = self:playerFloorY(p, root.Position.Y)
+			if not self:standingIsSafe(root, rule, floorY) then
+				self:spendShield(p, root, floorY, protected)
 			end
 		end
 
@@ -870,18 +1422,16 @@ function MatchController:run()
 		for _, p in self:aliveList() do
 			before[p] = p.floor
 		end
-		self:clearPickups()
 		self:dropTiles(rule, protected)
 		self:send({ phase = "drop", round = self.round })
 		task.wait(Config.DROP_TIME)
 
-		-- Кто остался на своём этаже — пережил раунд: монеты и серия.
+		-- Кто остался на своём этаже — пережил раунд. Монеты только с подбора.
 		for p, floorBefore in before do
 			if p.alive and p.floor == floorBefore then
 				p.rounds += 1
 				p.streak += 1
 				p.player:SetAttribute("Streak", p.streak)
-				Economy.addCoins(p.player, Config.ECONOMY.ROUND_SURVIVED * Economy.streakMultiplier(p.streak - 1), "round")
 			end
 		end
 	end
@@ -908,12 +1458,6 @@ function MatchController:finish()
 		local eliminatedBefore = (p.place or 1) - 1
 		local place = #self.participants - eliminatedBefore
 		table.insert(standings, { name = p.player.DisplayName, rounds = p.rounds, place = place, winner = table.find(winners, p) ~= nil })
-		if not p.left and p.player.Parent then
-			Economy.addCoins(p.player, Config.ECONOMY.PER_ELIMINATED_BEFORE * eliminatedBefore, "outlast")
-			if place <= 3 then
-				Economy.addCoins(p.player, Config.ECONOMY.TOP3, "top3")
-			end
-		end
 	end
 	table.sort(standings, function(a, b)
 		return a.place < b.place
@@ -958,6 +1502,11 @@ function MatchController:finish()
 	self:setBeacons(GOLD)
 	self:send({ phase = "results", winners = names, standings = standings, timeLeft = Config.RESULTS_TIME, round = self.round })
 	self:feed((if #names == 1 then names[1] .. " побеждает!" else "Матч окончен!"), "win")
+	for _, p in self.participants do
+		if p.player.Parent then
+			task.spawn(Economy.save, p.player)
+		end
+	end
 	task.wait(Config.RESULTS_TIME)
 
 	for _, p in self.participants do
