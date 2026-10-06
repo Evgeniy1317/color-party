@@ -14,6 +14,10 @@ local NAMES = {
 	"Spectate", -- клиент → сервер: "start" | "next" | "prev" | "stop"; сервер → клиент: { ok, slot, center, index, total, message? }
 	"Economy", -- сервер → клиент: { coins, delta, reason }
 	"Reaction", -- клиент → сервер → всем: (emoji: string)
+	"Skins", -- клиент → сервер: buy | equip | clear, id
+	"SkinState", -- сервер → клиент: { coins, owned, equipped, notice? }
+	"Wheel", -- клиент → сервер: state | spin | robux
+	"WheelState", -- сервер → клиент: шансы, бесплатный спин, результат
 }
 
 local Remotes = {}

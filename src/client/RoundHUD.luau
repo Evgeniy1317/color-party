@@ -357,7 +357,7 @@ local function updateLives()
 		livesLabel.Text = ""
 		return
 	end
-	livesLabel.Text = if lives >= 2 then "♥   ♥" elseif lives == 1 then "♥   ♡" else "♡   ♡"
+	livesLabel.Text = if lives >= 3 then "♥   ♥   ♥" elseif lives >= 2 then "♥   ♥" elseif lives == 1 then "♥   ♡" else "♡   ♡"
 end
 
 local function updateStreak()

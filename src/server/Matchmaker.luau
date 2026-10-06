@@ -597,6 +597,13 @@ function Matchmaker.spectate(player: Player, action: string?)
 		end
 	else
 		idx = 1
+		for i, entry in list do
+			for _, controller in controllers do
+				if controller.slot == entry.slot and controller.spectators[player] then
+					idx = i
+				end
+			end
+		end
 	end
 	idx = math.clamp(idx, 1, #list)
 	spectatorIndex[player] = idx
@@ -613,6 +620,23 @@ end
 
 function Matchmaker.clearSpectator(player: Player)
 	spectatorIndex[player] = nil
+end
+
+function Matchmaker.releaseWatcher(player: Player)
+	for _, controller in controllers do
+		if controller.spectators[player] then
+			controller:returnSpectator(player)
+		end
+	end
+end
+
+function Matchmaker.useDash(player: Player): boolean
+	for _, controller in controllers do
+		if controller:tryDash(player) then
+			return true
+		end
+	end
+	return false
 end
 
 function Matchmaker.controller(slot: number): MatchController.MatchController?

@@ -13,6 +13,10 @@ local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local TOOLBOX = {
 	ConsoleKiosk = 12705353460, -- binkNYC kiosk
 	LobbySpyglass = 126082088402161, -- Binoculars Spyglass Telescope Viewfinder
+	SkinShop = 110787718779395, -- белый магазин с витринами
+	FortuneWheel = 124357423451244, -- колесо призов
+	LeaderTrophy = 15132019926, -- золотой кубок
+	QuestBoard = 73062574837816, -- пробковая доска
 }
 
 -- Текстуры, загруженные в Roblox (сгенерированы под этот проект).
@@ -57,12 +61,13 @@ local ARENA_COLORS = {
 	Color3.fromRGB(204, 104, 132),
 }
 
+-- Четыре стойки ровно через 90°, в стороне от окна (около 90°) и двери паркура (около 270°).
+-- yaw — доворот модели, чтобы лицо смотрело в центр лобби.
 local ZONES = {
-	{ id = "Skins", title = "Магазин скинов", angle = 18, accent = Color3.fromRGB(212, 164, 96) },
-	{ id = "Wheel", title = "Колесо фортуны", angle = 342, accent = Color3.fromRGB(164, 132, 196) },
-	{ id = "Pets", title = "Магазин питомцев", angle = 150, accent = Color3.fromRGB(96, 168, 156) },
-	{ id = "Board", title = "Лидерборд", angle = 198, accent = Color3.fromRGB(206, 146, 78) },
-	{ id = "Quest", title = "Квесты", angle = 238, accent = Color3.fromRGB(112, 148, 186) },
+	{ id = "Skins", title = "Магазин", angle = 45, yaw = 0, accent = Color3.fromRGB(196, 92, 92), model = "SkinShop", asset = TOOLBOX.SkinShop, tall = 20, wide = 32 },
+	{ id = "Wheel", title = "Колесо\nфортуны", angle = 135, yaw = 180, accent = Color3.fromRGB(164, 120, 196), model = "FortuneWheel", asset = TOOLBOX.FortuneWheel, tall = 24, wide = 22 },
+	{ id = "Board", title = "Лидеры", angle = 225, yaw = 0, accent = Color3.fromRGB(196, 148, 64), model = "LeaderTrophy", asset = TOOLBOX.LeaderTrophy, tall = 22, wide = 16 },
+	{ id = "Quest", title = "Квесты", angle = 315, yaw = 0, accent = Color3.fromRGB(92, 132, 176), model = "QuestBoard", asset = TOOLBOX.QuestBoard, tall = 18, wide = 26 },
 }
 
 local CHECKPOINT_SCRIPT = [=[
@@ -891,6 +896,20 @@ function LobbyBuilder.buildPodiums(world: Folder)
 		lobby = LobbyBuilder.buildLobby(world)
 	end
 	local podiums = subfolder(lobby, "Podiums")
+	local standRadius = 56
+
+	local function cleanModel(model: Model)
+		for _, desc in model:GetDescendants() do
+			if desc:IsA("LuaSourceContainer") or desc:IsA("ProximityPrompt") or desc:IsA("Sound") or desc:IsA("Humanoid") or desc:IsA("Tool") then
+				desc:Destroy()
+			elseif desc:IsA("BasePart") then
+				desc.Anchored = true
+				if desc.Name == "Baseplate" or desc.Name == "Pad" or desc.Size.X > 80 or desc.Size.Z > 80 or desc.Size.Y > 80 then
+					desc:Destroy()
+				end
+			end
+		end
+	end
 
 	for _, zone in ZONES do
 		local model = Instance.new("Model")
@@ -898,50 +917,108 @@ function LobbyBuilder.buildPodiums(world: Folder)
 		model:SetAttribute("ZoneId", zone.id)
 		model.Parent = podiums
 
-		local base = pointOnLobby(zone.angle, 58, 0)
-		local top = SURFACE + 1.55
-		disc(zone.id .. "Base", 11, 1.55, Vector3.new(base.X, SURFACE + 0.78, base.Z), zone.accent, Enum.Material.SmoothPlastic, model)
-		disc(zone.id .. "Glow", 12.05, 0.18, Vector3.new(base.X, top - 0.08, base.Z), zone.accent, Enum.Material.SmoothPlastic, model, false)
-		local plinth = disc(zone.id .. "Plinth", 4.4, 0.7, Vector3.new(base.X, top + 0.35, base.Z), Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic, model)
-		plinth:SetAttribute("Placeholder", true)
-		local halo = disc(zone.id .. "Halo", 3.1, 0.18, Vector3.new(base.X, top + 2.6, base.Z), zone.accent, Enum.Material.SmoothPlastic, model, false)
-		halo:SetAttribute("Spin", 22)
+		local base = pointOnLobby(zone.angle, standRadius, 0)
+		local top = SURFACE + 0.7
+		local exhibit = cloneToolbox(zone.model, zone.asset)
+		local foot = 7
+		if exhibit then
+			exhibit.Name = "Exhibit"
+			exhibit.Parent = model
+			cleanModel(exhibit)
+			local _, bbox = exhibit:GetBoundingBox()
+			local fit = math.min(zone.tall / math.max(bbox.Y, 0.2), zone.wide / math.max(bbox.X, bbox.Z, 0.2))
+			fit = math.clamp(fit, 0.04, 14)
+			pcall(function()
+				exhibit:ScaleTo(fit)
+			end)
+			local _, fitted = exhibit:GetBoundingBox()
+			foot = math.clamp(math.max(fitted.X, fitted.Z) * 0.5 + 2, 8, 20)
+			local stand = Vector3.new(base.X, top, base.Z)
+			local face = Vector3.new(LOBBY_CENTER.X, top, LOBBY_CENTER.Z)
+			local facing = CFrame.lookAt(stand, face) * CFrame.Angles(0, math.rad(zone.yaw or 0), 0)
+			pivotModelBottom(exhibit, facing)
+			for _, desc in exhibit:GetDescendants() do
+				if desc:IsA("BasePart") then
+					desc.Anchored = true
+					desc.CanCollide = desc.Size.Magnitude > 2
+				end
+			end
+		end
+
+		disc(zone.id .. "Base", foot, 0.7, Vector3.new(base.X, SURFACE + 0.35, base.Z), Color3.fromRGB(248, 246, 250), Enum.Material.SmoothPlastic, model)
+		disc(zone.id .. "Ring", foot + 0.55, 0.16, Vector3.new(base.X, SURFACE + 0.08, base.Z), zone.accent, Enum.Material.SmoothPlastic, model, false)
 
 		local inward = (LOBBY_CENTER - base).Unit
-		local signAt = base + inward * 10.5
+		local twoLines = string.find(zone.title, "\n", 1, true) ~= nil
+		local signAt = base + inward * (foot + 6)
 		local sign = part({
 			Name = "Sign",
-			Size = Vector3.new(11, 3.4, 0.45),
-			CFrame = CFrame.lookAt(Vector3.new(signAt.X, top + 2.3, signAt.Z), Vector3.new(LOBBY_CENTER.X, top + 2.3, LOBBY_CENTER.Z)),
-			Color = Color3.fromRGB(255, 255, 255),
+			Size = Vector3.new(if twoLines then 14 else 11, 4.6, 0.4),
+			CFrame = CFrame.lookAt(Vector3.new(signAt.X, SURFACE + 3.2, signAt.Z), Vector3.new(LOBBY_CENTER.X, SURFACE + 3.2, LOBBY_CENTER.Z)),
+			Color = Color3.fromRGB(255, 252, 248),
 			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
 			Parent = model,
 		})
-
 		local gui = Instance.new("SurfaceGui")
 		gui.Name = "Label"
 		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 48
 		gui.LightInfluence = 0
 		gui.Brightness = 1.4
-		gui.PixelsPerStud = 42
 		gui.Parent = sign
-
 		local label = Instance.new("TextLabel")
-		label.BackgroundColor3 = Color3.fromRGB(36, 30, 26)
-		label.BackgroundTransparency = 0.12
+		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)
 		label.Font = Enum.Font.GothamBold
 		label.TextScaled = true
-		label.TextColor3 = Color3.fromRGB(255, 236, 214)
+		label.TextWrapped = true
+		label.TextColor3 = Color3.fromRGB(48, 40, 52)
 		label.Text = zone.title
 		label.Parent = gui
+		local pad = Instance.new("UIPadding")
+		pad.PaddingTop = UDim.new(0.08, 0)
+		pad.PaddingBottom = UDim.new(0.08, 0)
+		pad.PaddingLeft = UDim.new(0.06, 0)
+		pad.PaddingRight = UDim.new(0.06, 0)
+		pad.Parent = label
 
-		local padding = Instance.new("UIPadding")
-		padding.PaddingLeft = UDim.new(0.06, 0)
-		padding.PaddingRight = UDim.new(0.06, 0)
-		padding.Parent = label
-
-		marker(plinth, zone.title, zone.accent, 8)
+		if zone.id == "Quest" and exhibit then
+			local _, boardSize = exhibit:GetBoundingBox()
+			local boardWide = math.max(boardSize.X, boardSize.Z)
+			local notes = {
+				{ -0.24, 0.22, Color3.fromRGB(255, 244, 214), "Победа" },
+				{ 0.24, 0.16, Color3.fromRGB(255, 214, 214), "Серия" },
+				{ 0.0, -0.24, Color3.fromRGB(214, 232, 255), "Монеты" },
+			}
+			local pivot = exhibit:GetPivot()
+			for index, note in notes do
+				local paper = part({
+					Name = "Note" .. index,
+					Size = Vector3.new(boardWide * 0.24, boardSize.Y * 0.2, 0.1),
+					CFrame = pivot * CFrame.new(note[1] * boardWide, note[2] * boardSize.Y, -0.8),
+					Color = note[3],
+					Material = Enum.Material.SmoothPlastic,
+					CanCollide = false,
+					Parent = model,
+				})
+				local paperGui = Instance.new("SurfaceGui")
+				paperGui.Face = Enum.NormalId.Front
+				paperGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				paperGui.PixelsPerStud = 40
+				paperGui.LightInfluence = 0
+				paperGui.Parent = paper
+				local paperText = Instance.new("TextLabel")
+				paperText.BackgroundTransparency = 1
+				paperText.Size = UDim2.fromScale(1, 1)
+				paperText.Font = Enum.Font.GothamBold
+				paperText.TextScaled = true
+				paperText.TextColor3 = Color3.fromRGB(62, 48, 40)
+				paperText.Text = note[4]
+				paperText.Parent = paperGui
+			end
+		end
 	end
 end
 

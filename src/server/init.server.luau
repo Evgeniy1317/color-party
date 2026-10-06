@@ -23,9 +23,13 @@ local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("R
 local Economy = require(script:WaitForChild("Economy"))
 local Matchmaker = require(script:WaitForChild("Matchmaker"))
 local ArenaFx = require(script:WaitForChild("ArenaFx"))
+local SkinShop = require(script:WaitForChild("SkinShop"))
+local Wheel = require(script:WaitForChild("Wheel"))
 
 Remotes.init()
 Economy.init()
+SkinShop.init()
+Wheel.init()
 
 local world = workspace:WaitForChild("World", 30)
 if not world then
@@ -49,6 +53,7 @@ local spectate = Remotes.get("Spectate")
 spectate.OnServerEvent:Connect(function(player, action)
 	if typeof(action) == "string" and action == "stop" then
 		Matchmaker.clearSpectator(player)
+		Matchmaker.releaseWatcher(player)
 		return
 	end
 	if player:GetAttribute("InMatch") == nil then

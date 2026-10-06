@@ -78,8 +78,12 @@ export type Participant = {
 	placedAt: number,
 	shieldAt: number,
 	dashUntil: number,
+	dashReady: number,
 	lastSafe: Vector3?,
 	catchHold: number,
+	revived: boolean,
+	reviveUntil: number,
+	spare: boolean,
 }
 
 local MatchController = {}
@@ -685,6 +689,44 @@ function MatchController:showDashTrail(p: Participant)
 	end)
 end
 
+function MatchController:tryDash(player: Player): boolean
+	if self.state ~= "running" or player:GetAttribute("PerkDash") ~= true then
+		return false
+	end
+	local found: Participant? = nil
+	for _, entry in self.participants do
+		if entry.player == player then
+			found = entry
+			break
+		end
+	end
+	if not found or not found.alive then
+		return false
+	end
+	local now = os.clock()
+	if now < found.dashReady then
+		return false
+	end
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return false
+	end
+	found.dashUntil = now + 3.5
+	found.dashReady = now + 14
+	local restore = if player:GetAttribute("PerkSpeed") == true then 22 else 16
+	humanoid.WalkSpeed = 27
+	self:showDashTrail(found)
+	if found.shield then
+		self:showShieldRing(found)
+	end
+	task.delay(3.5, function()
+		if humanoid.Parent then
+			humanoid.WalkSpeed = restore
+		end
+	end)
+	return true
+end
+
 local PICKUP_LOOK = {
 	Coin = { spin = 140, lift = 2.6, scale = 2.6 },
 	Shield = { spin = 46, lift = 3.2, scale = 3.5 },
@@ -718,9 +760,10 @@ function MatchController:takePickup(item: Instance, p: Participant)
 			if p.shield then
 				self:showShieldRing(p)
 			end
+			local restore = if p.player:GetAttribute("PerkSpeed") == true then 22 else 16
 			task.delay(3.5, function()
 				if humanoid.Parent then
-					humanoid.WalkSpeed = 16
+					humanoid.WalkSpeed = restore
 				end
 			end)
 		end
@@ -859,16 +902,156 @@ local function clearWornEffects(player: Player)
 	end
 end
 
+local function releaseBody(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		root.Anchored = false
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = false
+	end
+end
+
 local function toLobby(player: Player)
+	Economy.settleMatch(player)
 	clearWornEffects(player)
+	releaseBody(player)
 	local character = player.Character
 	if character then
 		character:PivotTo(lobbySpawn())
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
-			humanoid.WalkSpeed = 16
+			humanoid.WalkSpeed = if player:GetAttribute("PerkSpeed") == true then 22 else 16
 		end
 	end
+end
+
+local SALUTE_COLORS = {
+	Color3.fromRGB(255, 80, 90),
+	Color3.fromRGB(255, 200, 70),
+	Color3.fromRGB(80, 200, 255),
+	Color3.fromRGB(180, 120, 255),
+	Color3.fromRGB(255, 140, 210),
+}
+
+local function boom(parent: Instance, soundId: string, volume: number, speed: number)
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume
+	sound.PlaybackSpeed = speed
+	sound.RollOffMaxDistance = 600
+	sound.Parent = parent
+	sound:Play()
+end
+
+local function strikeAt(position: Vector3)
+	local pieces = {}
+	local function neon(size: Vector3, cf: CFrame, color: Color3, shape: Enum.PartType): Part
+		local part = Instance.new("Part")
+		part.Name = "DeathBolt"
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.Material = Enum.Material.Neon
+		part.Color = color
+		part.Size = size
+		part.CFrame = cf
+		part.Shape = shape
+		part.Parent = workspace
+		table.insert(pieces, part)
+		return part
+	end
+	local bolt = neon(Vector3.new(10, 220, 10), CFrame.new(position + Vector3.new(0, 100, 0)), Color3.fromRGB(210, 235, 255), Enum.PartType.Block)
+	neon(Vector3.new(4, 220, 4), CFrame.new(position + Vector3.new(7, 100, 0)), Color3.fromRGB(140, 190, 255), Enum.PartType.Block)
+	neon(Vector3.new(4, 200, 4), CFrame.new(position + Vector3.new(-6, 95, 4)), Color3.fromRGB(255, 255, 255), Enum.PartType.Block)
+	local glow = neon(Vector3.new(28, 28, 28), CFrame.new(position + Vector3.new(0, 4, 0)), Color3.fromRGB(235, 248, 255), Enum.PartType.Ball)
+	local light = Instance.new("PointLight")
+	light.Brightness = 8
+	light.Range = 80
+	light.Color = Color3.fromRGB(200, 230, 255)
+	light.Parent = glow
+	boom(bolt, "rbxasset://sounds/HalloweenThunder.wav", 2, 1)
+	boom(bolt, "rbxasset://sounds/impact_explosion.mp3", 1.4, 0.7)
+	task.delay(2.4, function()
+		for _, part in pieces do
+			part:Destroy()
+		end
+	end)
+end
+
+local function saluteBurst(position: Vector3, color: Color3)
+	local anchor = Instance.new("Part")
+	anchor.Name = "Salute"
+	anchor.Shape = Enum.PartType.Ball
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.Material = Enum.Material.Neon
+	anchor.Color = color
+	anchor.Size = Vector3.new(8, 8, 8)
+	anchor.CFrame = CFrame.new(position)
+	anchor.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Brightness = 6
+	light.Range = 70
+	light.Color = color
+	light.Parent = anchor
+	TweenService:Create(anchor, TweenInfo.new(1.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Vector3.new(26, 26, 26),
+		Transparency = 1,
+	}):Play()
+	for _ = 1, 16 do
+		local spark = Instance.new("Part")
+		spark.Shape = Enum.PartType.Ball
+		spark.Anchored = true
+		spark.CanCollide = false
+		spark.CanQuery = false
+		spark.CanTouch = false
+		spark.Material = Enum.Material.Neon
+		spark.Color = color
+		spark.Size = Vector3.new(3.4, 3.4, 3.4)
+		spark.CFrame = CFrame.new(position)
+		spark.Parent = workspace
+		local fly = Vector3.new(math.random(-48, 48), math.random(10, 42), math.random(-48, 48))
+		TweenService:Create(spark, TweenInfo.new(1.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			CFrame = CFrame.new(position + fly),
+			Transparency = 1,
+			Size = Vector3.new(1.2, 1.2, 1.2),
+		}):Play()
+		task.delay(1.45, function()
+			spark:Destroy()
+		end)
+	end
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(color, Color3.fromRGB(255, 255, 255))
+	emitter.LightEmission = 1
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 7),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Lifetime = NumberRange.new(1.4, 2.2)
+	emitter.Speed = NumberRange.new(28, 55)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Rate = 0
+	emitter.Parent = anchor
+	emitter:Emit(80)
+	boom(anchor, "rbxasset://sounds/impact_explosion.mp3", 0.9, 1.35)
+	task.delay(2.4, function()
+		anchor:Destroy()
+	end)
 end
 
 function MatchController:clearPlayerState(player: Player)
@@ -878,9 +1061,94 @@ function MatchController:clearPlayerState(player: Player)
 	player:SetAttribute("Streak", 0)
 end
 
+function MatchController:returnSpectator(player: Player)
+	if not self.spectators[player] then
+		return
+	end
+	toLobby(player)
+end
+
+function MatchController:launchSalute()
+	local origin = Vector3.new(self.center.X, self.upperY + 58, self.center.Z)
+	for i = 1, 14 do
+		task.delay((i - 1) * 0.28, function()
+			local offset = Vector3.new(math.random(-42, 42), math.random(-6, 24), math.random(-42, 42))
+			saluteBurst(origin + offset, SALUTE_COLORS[((i - 1) % #SALUTE_COLORS) + 1])
+		end)
+	end
+end
+
+function MatchController:rescue(p: Participant, notice: string): boolean
+	p.reviveUntil = os.clock() + 6
+	p.arrived = false
+	p.stable = false
+	p.floor = "upper"
+	if p.catchPad then
+		p.catchPad:Destroy()
+		p.catchPad = nil
+	end
+	self:feed(notice, "out")
+	releaseBody(p.player)
+	local character = p.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health > 0 and humanoid:GetState() ~= Enum.HumanoidStateType.Dead then
+		self:placeOnArena(p)
+		return true
+	end
+	p.player:LoadCharacter()
+	return true
+end
+
+function MatchController:tryRevive(p: Participant): boolean
+	if p.left then
+		return false
+	end
+	if p.spare then
+		p.spare = false
+		p.player:SetAttribute("Lives", 1)
+		return self:rescue(p, p.player.DisplayName .. " цепляется за девятую жизнь!")
+	end
+	if p.revived or p.player:GetAttribute("PerkRevive") ~= true then
+		return false
+	end
+	p.revived = true
+	return self:rescue(p, p.player.DisplayName .. " воскрес!")
+end
+
+local function parkUnderArena(self: MatchController, player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	character:PivotTo(CFrame.new(self.center - Vector3.new(0, 90, 0)))
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+		root.Anchored = true
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = true
+		humanoid.WalkSpeed = 0
+	end
+end
+
 function MatchController:eliminate(p: Participant, reason: string)
 	if not p.alive then
 		return
+	end
+	if reason ~= "left" and os.clock() < p.reviveUntil then
+		return
+	end
+	if reason ~= "left" and self:tryRevive(p) then
+		return
+	end
+	local spot = self.center
+	local character = p.player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		spot = root.Position
 	end
 	p.alive = false
 	p.streak = 0
@@ -892,9 +1160,12 @@ function MatchController:eliminate(p: Participant, reason: string)
 	end
 	self:clearShieldRing(p)
 	self:clearPlayerState(p.player)
+	if reason ~= "left" and (p.player:GetAttribute("PerkLightning") == true or Economy.ownsSkin(p.player, "perk_lightning")) then
+		strikeAt(spot)
+	end
 	if not p.left then
 		self.spectators[p.player] = true
-		toLobby(p.player)
+		parkUnderArena(self, p.player)
 		Economy.recordRounds(p.player, p.rounds)
 		local info = self:info()
 		self:feed(p.player.DisplayName .. (if reason == "left" then " покинул матч" else " выбыл!") .. "  Осталось: " .. info.alive, "out")
@@ -1004,6 +1275,9 @@ function MatchController:watch()
 			end
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 			if not humanoid or humanoid.Health <= 0 then
+				if os.clock() < p.reviveUntil then
+					continue
+				end
 				if not p.stable then
 					p.arrived = false
 				else
@@ -1107,7 +1381,7 @@ function MatchController:hookCharacter(p: Participant)
 		return
 	end
 	table.insert(self.connections, humanoid.Died:Connect(function()
-		if not p.alive then
+		if not p.alive or os.clock() < p.reviveUntil then
 			return
 		end
 		if not p.stable then
@@ -1149,10 +1423,13 @@ function MatchController:placeOnArena(p: Participant): boolean
 	p.stable = false
 	p.placedAt = os.clock()
 	p.floor = "upper"
-	p.lives = Config.LIVES
-	p.player:SetAttribute("Lives", Config.LIVES)
+	local extraLife = if p.player:GetAttribute("PerkLife") == true then 1 else 0
+	p.lives = Config.LIVES + extraLife
+	p.player:SetAttribute("Lives", p.lives)
+	humanoid.WalkSpeed = if p.player:GetAttribute("PerkSpeed") == true then 22 else 16
 	self:hookCharacter(p)
 	if p.shield then
+		p.player:SetAttribute("Shield", true)
 		self:showShieldRing(p)
 	end
 	return true
@@ -1217,6 +1494,7 @@ function MatchController:start(players: { Player })
 	self.spectators = {}
 	self.palette = RoundRules.matchPalette(self.rng)
 	for _, player in players do
+		Economy.activateMatch(player)
 		table.insert(self.participants, {
 			player = player,
 			alive = true,
@@ -1224,7 +1502,7 @@ function MatchController:start(players: { Player })
 			lives = Config.LIVES,
 			streak = 0,
 			rounds = 0,
-			shield = false,
+			shield = player:GetAttribute("PerkShield") == true,
 			left = false,
 			catchPad = nil,
 			shieldPad = nil,
@@ -1234,8 +1512,12 @@ function MatchController:start(players: { Player })
 			placedAt = 0,
 			shieldAt = 0,
 			dashUntil = 0,
+			dashReady = 0,
 			lastSafe = nil,
 			catchHold = 0,
+			revived = false,
+			reviveUntil = 0,
+			spare = player:GetAttribute("PerkLife") == true,
 		})
 	end
 	if #self.participants == 0 then
@@ -1500,6 +1782,12 @@ function MatchController:finish()
 	local winnerText = if #names == 0 then "НИЧЬЯ" elseif #names == 1 then names[1] else "ПОБЕДИТЕЛИ: " .. #names
 	self:setScreen(if #names == 1 then "ПОБЕДИТЕЛЬ: " .. names[1] else winnerText, "Раундов сыграно: " .. self.round, GOLD)
 	self:setBeacons(GOLD)
+	for _, w in winners do
+		if w.player:GetAttribute("PerkSalute") == true or Economy.ownsSkin(w.player, "perk_salute") then
+			self:launchSalute()
+			break
+		end
+	end
 	self:send({ phase = "results", winners = names, standings = standings, timeLeft = Config.RESULTS_TIME, round = self.round })
 	self:feed((if #names == 1 then names[1] .. " побеждает!" else "Матч окончен!"), "win")
 	for _, p in self.participants do
