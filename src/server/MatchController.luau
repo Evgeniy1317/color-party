@@ -739,8 +739,15 @@ function MatchController:takePickup(item: Instance, p: Participant)
 	end
 	item:SetAttribute("Taken", true)
 	local kind = item:GetAttribute("Pickup")
+	local function quest(kindName: string)
+		local module = script.Parent:FindFirstChild("Quests")
+		if module and module:IsA("ModuleScript") then
+			require(module).progress(p.player, kindName, 1)
+		end
+	end
 	if kind == "Coin" then
 		Economy.addCoins(p.player, 10, "coin")
+		quest("coins")
 	elseif kind == "Shield" then
 		p.shield = true
 		p.player:SetAttribute("Shield", true)
@@ -751,6 +758,7 @@ function MatchController:takePickup(item: Instance, p: Participant)
 			self:giveShieldPad(p, root, self:playerFloorY(p, root.Position.Y), root.Position)
 		end
 		self:showShieldRing(p)
+		quest("shields")
 	elseif kind == "Dash" then
 		local humanoid = p.player.Character and p.player.Character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
@@ -767,6 +775,7 @@ function MatchController:takePickup(item: Instance, p: Participant)
 				end
 			end)
 		end
+		quest("dashes")
 	end
 	item:Destroy()
 end

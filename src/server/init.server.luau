@@ -25,11 +25,15 @@ local Matchmaker = require(script:WaitForChild("Matchmaker"))
 local ArenaFx = require(script:WaitForChild("ArenaFx"))
 local SkinShop = require(script:WaitForChild("SkinShop"))
 local Wheel = require(script:WaitForChild("Wheel"))
+local Leaderboard = require(script:WaitForChild("Leaderboard"))
+local Quests = require(script:WaitForChild("Quests"))
 
 Remotes.init()
 Economy.init()
 SkinShop.init()
 Wheel.init()
+Leaderboard.init()
+Quests.init()
 
 local world = workspace:WaitForChild("World", 30)
 if not world then

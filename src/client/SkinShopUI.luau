@@ -77,6 +77,7 @@ local state = {
 	notice = "",
 	charges = {} :: { [string]: number },
 	discount = 0,
+	armed = "",
 }
 
 local gui = Instance.new("ScreenGui")
@@ -395,6 +396,14 @@ local function owns(id: string): boolean
 	return state.owned[id] == true
 end
 
+local function stock(id: string): number
+	local count = state.charges[id] or 0
+	if state.armed == id then
+		count += 1
+	end
+	return count
+end
+
 local function matches(name: string): boolean
 	if query == "" then
 		return true
@@ -679,6 +688,22 @@ local function fillPerk(id: string, ownedForever: boolean)
 	if not item then
 		return
 	end
+	local stored = stock(id)
+	if stored > 0 then
+		buyRow.Size = UDim2.new(1, -24, 0, 110)
+		perkStage.Size = UDim2.new(1, -20, 1, -238)
+		previewName.Position = UDim2.new(0, 14, 1, -182)
+		previewBlurb.Position = UDim2.new(0, 14, 1, -152)
+		local have = Instance.new("TextLabel")
+		have.BackgroundTransparency = 1
+		have.Size = UDim2.new(1, 0, 0, 18)
+		have.Font = Enum.Font.GothamBold
+		have.TextSize = 13
+		have.TextColor3 = GOLD
+		have.Text = "В запасе на матч: " .. tostring(stored)
+		have.LayoutOrder = 0
+		have.Parent = buyRow
+	end
 	perkLine("1 матч", 1, id, sale(Shop.onceCoins(id)), Shop.onceRobux(id), true)
 	perkLine("Навсегда", 2, id, sale(item.coins), item.robux, false)
 end
@@ -752,7 +777,7 @@ local function showPerk(id: string)
 	badge.Font = Enum.Font.GothamBold
 	badge.TextSize = 14
 	badge.TextColor3 = Color3.fromRGB(40, 28, 12)
-	badge.Text = if state.owned[id] then "∞" else tostring(state.charges[id] or 0)
+	badge.Text = if state.owned[id] then "∞" else tostring(stock(id))
 	badge.ZIndex = 6
 	badge.Parent = perkStage
 	corner(badge, 8)
@@ -874,7 +899,7 @@ local function card(id: string, order: number, nameText: string, image: string?,
 		badge.Font = Enum.Font.GothamBold
 		badge.TextSize = 12
 		badge.TextColor3 = Color3.fromRGB(40, 28, 12)
-		badge.Text = if state.owned[id] then "∞" else tostring(state.charges[id] or 0)
+		badge.Text = if state.owned[id] then "∞" else tostring(stock(id))
 		badge.ZIndex = 5
 		badge.Parent = button
 		corner(badge, 8)
@@ -1114,6 +1139,7 @@ local function applyPayload(data)
 		end
 	end
 	state.discount = tonumber(data.discount) or 0
+	state.armed = if typeof(data.armed) == "string" then data.armed else ""
 	coinLabel.Text = money(state.coins)
 	if open then
 		rebuild()

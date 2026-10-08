@@ -26,6 +26,10 @@ type Profile = {
 	spinDay: number,
 	armed: string,
 	live: { [string]: boolean },
+	questDay: number,
+	daily: { { id: string, taken: boolean, progress: number, claimed: boolean } },
+	bpOwned: boolean,
+	bp: { [string]: { progress: number, claimed: boolean } },
 }
 
 local Economy = {}
@@ -51,6 +55,10 @@ local function defaultProfile(): Profile
 		spinDay = 0,
 		armed = "",
 		live = {},
+		questDay = 0,
+		daily = {},
+		bpOwned = false,
+		bp = {},
 	}
 end
 
@@ -116,6 +124,30 @@ local function load(player: Player)
 			if typeof(data.armed) == "string" then
 				profile.armed = data.armed
 			end
+			profile.questDay = math.floor(tonumber(data.questDay) or 0)
+			profile.bpOwned = data.bpOwned == true
+			if typeof(data.daily) == "table" then
+				for _, item in data.daily do
+					if typeof(item) == "table" and typeof(item.id) == "string" then
+						table.insert(profile.daily, {
+							id = item.id,
+							taken = item.taken == true,
+							progress = math.max(0, math.floor(tonumber(item.progress) or 0)),
+							claimed = item.claimed == true,
+						})
+					end
+				end
+			end
+			if typeof(data.bp) == "table" then
+				for id, item in data.bp do
+					if typeof(id) == "string" and typeof(item) == "table" then
+						profile.bp[id] = {
+							progress = math.max(0, math.floor(tonumber(item.progress) or 0)),
+							claimed = item.claimed == true,
+						}
+					end
+				end
+			end
 		end
 	end
 	-- Тестовый запас для владельца и для игры из Studio, чтобы можно было открыть дорогой магазин.
@@ -167,6 +199,10 @@ local function save(player: Player)
 		discount = profile.discount,
 		spinDay = profile.spinDay,
 		armed = profile.armed,
+		questDay = profile.questDay,
+		daily = profile.daily,
+		bpOwned = profile.bpOwned,
+		bp = profile.bp,
 	}
 	local key = "p_" .. player.UserId
 	for _ = 1, 3 do
@@ -241,6 +277,11 @@ function Economy.addCoins(player: Player, amount: number, reason: string)
 	queueSave(player)
 end
 
+function Economy.wins(player: Player): number
+	local profile = profiles[player]
+	return if profile then profile.wins else 0
+end
+
 function Economy.addWin(player: Player)
 	local profile = profiles[player]
 	if not profile then
@@ -249,6 +290,16 @@ function Economy.addWin(player: Player)
 	profile.wins += 1
 	push(player, 0, "win")
 	queueSave(player)
+	task.defer(function()
+		local module = script.Parent:FindFirstChild("Leaderboard")
+		if module and module:IsA("ModuleScript") then
+			require(module).changed(player)
+		end
+		local quests = script.Parent:FindFirstChild("Quests")
+		if quests and quests:IsA("ModuleScript") then
+			require(quests).progress(player, "wins", 1)
+		end
+	end)
 end
 
 function Economy.recordRounds(player: Player, rounds: number)
@@ -495,6 +546,37 @@ function Economy.settleMatch(player: Player)
 	end
 	profile.live = {}
 	Economy.refreshPerks(player)
+end
+
+function Economy.questBoard(player: Player): (number?, { { id: string, taken: boolean, progress: number, claimed: boolean } }?, boolean?, { [string]: { progress: number, claimed: boolean } }?)
+	local profile = profiles[player]
+	if not profile then
+		return nil, nil, nil, nil
+	end
+	return profile.questDay, profile.daily, profile.bpOwned, profile.bp
+end
+
+function Economy.setQuestBoard(player: Player, day: number, daily: { { id: string, taken: boolean, progress: number, claimed: boolean } })
+	local profile = profiles[player]
+	if not profile then
+		return
+	end
+	profile.questDay = day
+	profile.daily = daily
+	queueSave(player)
+end
+
+function Economy.setBattlePass(player: Player, owned: boolean)
+	local profile = profiles[player]
+	if not profile then
+		return
+	end
+	profile.bpOwned = owned
+	queueSave(player)
+end
+
+function Economy.saveQuests(player: Player)
+	queueSave(player)
 end
 
 function Economy.pushShop(player: Player, notice: string?)

@@ -205,6 +205,7 @@ local SKIN_ROBUX: { [string]: number } = {
 }
 
 -- Сюда вписываются id Developer Product. 0 = ещё не создан.
+-- battlepass — батл-пасс за 300 R$. Пока ключа нет, кнопка не списывает робуксы.
 local PRODUCTS: { [string]: number } = {}
 
 local ONCE: { [string]: { number } } = {

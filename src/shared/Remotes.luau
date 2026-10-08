@@ -18,6 +18,9 @@ local NAMES = {
 	"SkinState", -- сервер → клиент: { coins, owned, equipped, notice? }
 	"Wheel", -- клиент → сервер: state | spin | robux
 	"WheelState", -- сервер → клиент: шансы, бесплатный спин, результат
+	"Leaderboard", -- сервер → клиент: топ побед и место игрока
+	"Quests", -- клиент → сервер: state | take | claim | claimBp | robux
+	"QuestState", -- сервер → клиент: ежедневные квесты и батл-пасс
 }
 
 local Remotes = {}

@@ -9,6 +9,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Economy = require(script.Parent:WaitForChild("Economy"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
+local SkinShop = require(script.Parent:WaitForChild("SkinShop"))
+local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
 local WheelConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Wheel"))
 
 local Wheel = {}
@@ -33,19 +35,34 @@ local function pack(player: Player, extra: { [string]: any }?)
 	Remotes.get("WheelState"):FireClient(player, payload)
 end
 
-local function grant(player: Player, sectorId: string): (string, string)
+local function grant(player: Player, sectorId: string): (string, string, string)
 	if sectorId == "coins_s" then
 		Economy.addCoins(player, 1500, "wheel")
-		return "1 500 монет", "Монеты уже на счету"
+		return "1 500 монет", "Монеты уже на счету", WheelConfig.icon("coins_s")
 	elseif sectorId == "coins_m" then
 		Economy.addCoins(player, 4000, "wheel")
-		return "4 000 монет", "Монеты уже на счету"
+		return "4 000 монет", "Монеты уже на счету", WheelConfig.icon("coins_m")
 	elseif sectorId == "coins_l" then
 		Economy.addCoins(player, 12000, "wheel")
-		return "12 000 монет", "Монеты уже на счету"
+		return "12 000 монет", "Монеты уже на счету", WheelConfig.icon("coins_l")
 	elseif sectorId == "discount" then
 		Economy.setDiscount(player, math.max(Economy.discount(player), 30))
-		return "Скидка 30%", "Следующая покупка за монеты в магазине дешевле"
+		return "Скидка 30%", "Следующая покупка за монеты в магазине дешевле", WheelConfig.icon("discount")
+	elseif sectorId == "skin" then
+		local open = {}
+		for _, skin in Skins.all() do
+			if not Economy.ownsSkin(player, skin.id) then
+				table.insert(open, skin)
+			end
+		end
+		if #open == 0 then
+			Economy.addCoins(player, 4000, "wheel")
+			return "4 000 монет", "Все скины уже есть, вместо скина — монеты", WheelConfig.icon("coins_m")
+		end
+		local skin = open[rng:NextInteger(1, #open)]
+		SkinShop.grant(player, skin.id)
+		local thumb = "rbxthumb://type=Asset&id=" .. tostring(skin.asset) .. "&w=150&h=150"
+		return skin.name, "Скин надет. Он в магазине, во вкладке скинов", thumb
 	elseif sectorId == "match" then
 		local open = {}
 		for _, item in Shop.perks() do
@@ -55,11 +72,11 @@ local function grant(player: Player, sectorId: string): (string, string)
 		end
 		if #open == 0 then
 			Economy.addCoins(player, 4000, "wheel")
-			return "4 000 монет", "Все плюшки уже навсегда, вместо эффекта — монеты"
+			return "4 000 монет", "Все плюшки уже навсегда, вместо эффекта — монеты", WheelConfig.icon("coins_m")
 		end
 		local item = open[rng:NextInteger(1, #open)]
-		Economy.armPerk(player, item.id)
-		return item.name, "Сработает в следующем матче и потом выключится"
+		Economy.addCharge(player, item.id, 1)
+		return item.name, "Заряд на один матч уже в магазине, на иконке плюшки", WheelConfig.icon(item.id)
 	elseif sectorId == "trail" then
 		local open = {}
 		for _, item in Shop.trails() do
@@ -69,11 +86,11 @@ local function grant(player: Player, sectorId: string): (string, string)
 		end
 		if #open == 0 then
 			Economy.addCoins(player, 4000, "wheel")
-			return "4 000 монет", "Все следы уже есть, вместо следа — монеты"
+			return "4 000 монет", "Все следы уже есть, вместо следа — монеты", WheelConfig.icon("coins_m")
 		end
 		local item = open[rng:NextInteger(1, #open)]
-		Economy.grantSkin(player, item.id)
-		return item.name, "След в магазине, во вкладке «Следы»"
+		SkinShop.grant(player, item.id)
+		return item.name, "След надет. Он в магазине, во вкладке «Следы»", WheelConfig.icon(item.id)
 	end
 	local open = {}
 	for _, item in Shop.perks() do
@@ -83,19 +100,18 @@ local function grant(player: Player, sectorId: string): (string, string)
 	end
 	if #open == 0 then
 		Economy.addCoins(player, 6000, "wheel")
-		return "6 000 монет", "Все плюшки уже навсегда, вместо приза — монеты"
+		return "6 000 монет", "Все плюшки уже навсегда, вместо приза — монеты", WheelConfig.icon("coins_l")
 	end
 	local item = open[rng:NextInteger(1, #open)]
-	Economy.grantSkin(player, item.id)
-	Economy.refreshPerks(player)
-	return item.name, "Плюшка остаётся навсегда"
+	SkinShop.grant(player, item.id)
+	return item.name, "Плюшка уже в магазине и включена", WheelConfig.icon(item.id)
 end
 
 local function rollAngle(index: number): number
 	local sectors = WheelConfig.sectors()
 	local sector = sectors[index]
 	local cursor = 0
-	for at, item in sectors do
+	for at, item in ipairs(sectors) do
 		if at == index then
 			break
 		end
@@ -103,14 +119,14 @@ local function rollAngle(index: number): number
 	end
 	local span = sector.chance / 100 * 360
 	local start = cursor / 100 * 360
-	return start + span * rng:NextNumber(0.18, 0.82)
+	return start + span * 0.5
 end
 
 local function spin(player: Player): { [string]: any }?
 	local ticket = rng:NextNumber() * 100
 	local cursor = 0
 	local index = #WheelConfig.sectors()
-	for at, sector in WheelConfig.sectors() do
+	for at, sector in ipairs(WheelConfig.sectors()) do
 		cursor += sector.chance
 		if ticket <= cursor then
 			index = at
@@ -118,13 +134,15 @@ local function spin(player: Player): { [string]: any }?
 		end
 	end
 	local sector = WheelConfig.sectors()[index]
-	local title, detail = grant(player, sector.id)
+	local title, detail, icon = grant(player, sector.id)
 	Economy.pushShop(player)
 	return {
 		ok = true,
 		angle = rollAngle(index),
 		title = title,
 		detail = detail,
+		icon = icon,
+		sectorId = sector.id,
 		sector = sector.name,
 		free = Economy.freeSpin(player),
 		coins = Economy.coins(player),
@@ -156,7 +174,7 @@ local function begin(player: Player, mode: string)
 		return
 	end
 	busy[player] = true
-	task.delay(4.6, function()
+	task.delay(6.6, function()
 		busy[player] = nil
 	end)
 	local result = spin(player)
@@ -167,7 +185,7 @@ end
 
 function Wheel.grantPaid(player: Player)
 	if busy[player] then
-		task.delay(4.8, function()
+		task.delay(6.8, function()
 			if player.Parent then
 				Wheel.grantPaid(player)
 			end
@@ -175,7 +193,7 @@ function Wheel.grantPaid(player: Player)
 		return
 	end
 	busy[player] = true
-	task.delay(4.6, function()
+	task.delay(6.6, function()
 		busy[player] = nil
 	end)
 	local result = spin(player)

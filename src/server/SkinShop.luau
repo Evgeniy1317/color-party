@@ -569,6 +569,10 @@ local function attachPrompt()
 	prompt.Parent = host
 end
 
+function SkinShop.grant(player: Player, id: string)
+	give(player, id)
+end
+
 function SkinShop.init()
 	local remote = Remotes.get("Skins")
 	remote.OnServerEvent:Connect(function(player, action, id)
@@ -605,6 +609,8 @@ function SkinShop.init()
 			Economy.rememberReceipt(player, receipt.PurchaseId)
 			if itemId == "wheel" then
 				require(script.Parent:WaitForChild("Wheel")).grantPaid(player)
+			elseif itemId == "battlepass" then
+				require(script.Parent:WaitForChild("Quests")).grantPass(player)
 			elseif string.sub(itemId, -5) == "#once" then
 				local perkId = string.sub(itemId, 1, #itemId - 5)
 				Economy.addCharge(player, perkId, 1)
