@@ -7,6 +7,8 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Hub = require(script.Parent:WaitForChild("Hub"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
@@ -73,9 +75,9 @@ dim.BorderSizePixel = 0
 dim.Parent = gui
 
 local panel = Instance.new("Frame")
-panel.AnchorPoint = Vector2.new(0.5, 0.5)
-panel.Position = UDim2.fromScale(0.5, 0.5)
-panel.Size = UDim2.fromScale(0.78, 0.86)
+panel.AnchorPoint = Vector2.new(0.5, 0)
+panel.Position = UDim2.new(0.5, 0, 0, 106)
+panel.Size = UDim2.new(0.78, 0, 1, -122)
 panel.BackgroundColor3 = INK
 panel.BorderSizePixel = 0
 	panel.ClipsDescendants = true
@@ -98,7 +100,7 @@ title.Font = Enum.Font.GothamBlack
 title.TextSize = 24
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = WHITE
-title.Text = "Колесо фортуны"
+title.Text = Locale.t("Wheel of Fortune")
 title.Parent = panel
 
 local coinPill = Instance.new("Frame")
@@ -360,7 +362,7 @@ local function makeReelCard(index: number, sector: any): ReelSlot
 	name.TextSize = 13
 	name.TextColor3 = WHITE
 	name.TextTruncate = Enum.TextTruncate.AtEnd
-	name.Text = sector.short
+	name.Text = Locale.t(sector.short)
 	name.Parent = box
 	local chance = Instance.new("TextLabel")
 	chance.BackgroundTransparency = 1
@@ -420,7 +422,7 @@ hint.BackgroundTransparency = 1
 hint.Font = Enum.Font.Gotham
 hint.TextSize = 14
 hint.TextColor3 = MUTED
-hint.Text = "Один раз в день бесплатно. Дальше за монеты или робуксы."
+hint.Text = Locale.t("One free spin a day. Then coins or Robux.")
 hint.Parent = content
 
 local result = Instance.new("TextLabel")
@@ -500,7 +502,7 @@ local function card(parent: Instance, order: number, image: string, mark: string
 	nameLabel.TextSize = 15
 	nameLabel.TextColor3 = WHITE
 	nameLabel.TextWrapped = true
-	nameLabel.Text = name
+	nameLabel.Text = Locale.t(name)
 	nameLabel.Parent = box
 	local detailLabel = Instance.new("TextLabel")
 	detailLabel.BackgroundTransparency = 1
@@ -511,33 +513,33 @@ local function card(parent: Instance, order: number, image: string, mark: string
 	detailLabel.TextColor3 = MUTED
 	detailLabel.TextWrapped = true
 	detailLabel.TextYAlignment = Enum.TextYAlignment.Top
-	detailLabel.Text = detail
+	detailLabel.Text = Locale.t(detail)
 	detailLabel.Parent = box
 end
 
-section(4, "Призы")
+section(4, Locale.t("Prizes"))
 local prizeGrid = grid(5, #Wheel.sectors())
 for index, sector in ipairs(Wheel.sectors()) do
 	card(prizeGrid, index, sector.icon, sector.mark, sector.name, sector.detail, tostring(sector.chance) .. "%", sector.color)
 end
 
-section(6, "Случайный скин")
+section(6, Locale.t("Random skin"))
 local skinGrid = grid(7, #Skins.all())
 for index, skin in Skins.all() do
 	local thumb = "rbxthumb://type=Asset&id=" .. tostring(skin.asset) .. "&w=150&h=150"
-	card(skinGrid, index, thumb, nil, skin.name, skin.blurb, "из 8%", Wheel.rarityColor("gold"))
+	card(skinGrid, index, thumb, nil, skin.name, skin.blurb, Locale.fmt("1 of %d%%", 8), Wheel.rarityColor("gold"))
 end
 
-section(8, "Случайный след")
+section(8, Locale.t("Random trail"))
 local trailGrid = grid(9, #Shop.trails())
 for index, item in Shop.trails() do
-	card(trailGrid, index, Wheel.icon(item.id), nil, item.name, item.blurb, "из 7%", Wheel.rarityColor("purple"))
+	card(trailGrid, index, Wheel.icon(item.id), nil, item.name, item.blurb, Locale.fmt("1 of %d%%", 7), Wheel.rarityColor("purple"))
 end
 
-section(10, "Случайная плюшка")
+section(10, Locale.t("Random perk"))
 local perkGrid = grid(11, #Shop.perks())
 for index, item in Shop.perks() do
-	card(perkGrid, index, Wheel.icon(item.id), nil, item.name, item.blurb, "из 5%", Wheel.rarityColor("secret"))
+	card(perkGrid, index, Wheel.icon(item.id), nil, item.name, item.blurb, Locale.fmt("1 of %d%%", 5), Wheel.rarityColor("secret"))
 end
 
 local reward = Instance.new("Frame")
@@ -611,12 +613,12 @@ local function spinButton(text: string, color: Color3, textColor: Color3): TextB
 	return button
 end
 
-local freeButton = spinButton("Бесплатно", GREEN, Color3.fromRGB(20, 40, 28))
+local freeButton = spinButton(Locale.t("Free"), GREEN, Color3.fromRGB(20, 40, 28))
 local coinButton = spinButton(money(Wheel.SPIN_COINS), GOLD, Color3.fromRGB(40, 28, 12))
 local robuxButton = spinButton(tostring(Wheel.SPIN_ROBUX) .. " R$", BLUE, WHITE)
 
 local function paintFree()
-	freeButton.Text = if free then "Бесплатно" else "Завтра"
+	freeButton.Text = if free then Locale.t("Free") else Locale.t("Tomorrow")
 	freeButton.BackgroundColor3 = if free then GREEN else Color3.fromRGB(70, 64, 88)
 	freeButton.TextColor3 = if free then Color3.fromRGB(20, 40, 28) else WHITE
 	coinLabel.Text = money(coins)
@@ -639,6 +641,15 @@ local function setOpen(on: boolean)
 		end)
 	end
 end
+
+local function present(on: boolean)
+	setOpen(on)
+	if on then
+		Remotes.get("Wheel"):FireServer("state")
+	end
+end
+
+Hub.bind("wheel", present)
 
 local CONFETTI = {
 	Color3.fromRGB(255, 214, 96),
@@ -723,8 +734,8 @@ local function reveal(data: { [string]: any }, token: number)
 		won.stroke.Color = won.color
 		won.stroke.Thickness = 2.5
 	end
-	local titleText = if typeof(data.title) == "string" then data.title else "Приз"
-	local detail = if typeof(data.detail) == "string" then data.detail else ""
+	local titleText = if typeof(data.title) == "string" then Locale.translate(data.title) else Locale.t("Prize")
+	local detail = if typeof(data.detail) == "string" then Locale.translate(data.detail) else ""
 	local image = if typeof(data.icon) == "string" then data.icon else ""
 	result.Text = titleText .. " — " .. detail
 	for _, child in rewardIconHost:GetChildren() do
@@ -786,7 +797,7 @@ function land(data: { [string]: any })
 	freeButton.AutoButtonColor = false
 	coinButton.AutoButtonColor = false
 	robuxButton.AutoButtonColor = false
-	result.Text = "Крутится..."
+	result.Text = Locale.t("Spinning...")
 	local started = os.clock()
 	local duration = 5.35
 	spinConn = RunService.Heartbeat:Connect(function()
@@ -824,7 +835,7 @@ local function apply(data: { [string]: any })
 	end
 	paintFree()
 	if data.ok == false and typeof(data.notice) == "string" then
-		result.Text = data.notice
+		result.Text = Locale.translate(data.notice)
 		return
 	end
 	if data.ok == true and typeof(data.angle) == "number" then
@@ -860,12 +871,12 @@ end)
 
 close.Activated:Connect(function()
 	if not spinning then
-		setOpen(false)
+		Hub.close()
 	end
 end)
 dim.Activated:Connect(function()
 	if not spinning then
-		setOpen(false)
+		Hub.close()
 	end
 end)
 
@@ -874,13 +885,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.E then
-		setOpen(false)
-	end
-end)
-
-player:GetAttributeChangedSignal("InMatch"):Connect(function()
-	if player:GetAttribute("InMatch") ~= nil then
-		setOpen(false)
+		Hub.close()
 	end
 end)
 
@@ -907,8 +912,7 @@ task.spawn(function()
 			if player:GetAttribute("InMatch") ~= nil then
 				return
 			end
-			setOpen(true)
-			Remotes.get("Wheel"):FireServer("state")
+			Hub.show("wheel")
 		end)
 	end
 end)

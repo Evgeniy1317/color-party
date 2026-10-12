@@ -9,6 +9,7 @@ local SocialService = game:GetService("SocialService")
 local TeleportService = game:GetService("TeleportService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local MatchController = require(script.Parent:WaitForChild("MatchController"))
 
@@ -98,7 +99,7 @@ end
 
 local function notice(player: Player, text: string)
 	if player.Parent then
-		Remotes.get("PartyState"):FireClient(player, { notice = text })
+		Remotes.get("PartyState"):FireClient(player, { notice = Locale.forPlayer(player, text) })
 	end
 end
 
@@ -192,17 +193,17 @@ end
 -- host может быть лидером или участником: новый игрок встаёт в его пати.
 local function addToParty(host: Player, target: Player): string?
 	if not host.Parent or host == target then
-		return "Друг уже вышел"
+		return "Friend already left"
 	end
 	if host:GetAttribute("InMatch") ~= nil or target:GetAttribute("InMatch") ~= nil then
-		return "Кто-то уже в матче"
+		return "Someone is already in a match"
 	end
 	local party = parties[host]
 	if party and parties[target] == party then
 		return nil
 	end
 	if party and #party.members >= Config.MAX_PLAYERS_PER_MATCH then
-		return "Пати полное"
+		return "Party is full"
 	end
 	if parties[target] then
 		leaveParty(target)
@@ -274,7 +275,7 @@ local function broadcast()
 		queued = queue,
 	})
 	if consoleLabels.Queue then
-		consoleLabels.Queue.Text = "Готовы к матчу    " .. #queue .. " / " .. Config.MAX_PLAYERS_PER_MATCH
+		consoleLabels.Queue.Text = string.format("Ready    %d / %d", #queue, Config.MAX_PLAYERS_PER_MATCH)
 	end
 	for _, controller in controllers do
 		local label = consoleLabels["C" .. (controller.slot + 1)]
@@ -476,7 +477,7 @@ function Matchmaker.setReady(player: Player, ready: boolean, auto: boolean?)
 	local party = parties[player]
 	if party and #party.members >= 2 then
 		if ready and partyBusy(player) then
-			notice(player, "Ждём, пока вся пати выйдет из матча")
+			notice(player, "Waiting until the whole party leaves the match")
 			return
 		end
 		if ready then
@@ -489,7 +490,7 @@ function Matchmaker.setReady(player: Player, ready: boolean, auto: boolean?)
 		return
 	end
 	if ready and partyBusy(player) then
-		notice(player, "Ждём, пока вся пати выйдет из матча")
+		notice(player, "Waiting until the whole party leaves the match")
 		return
 	end
 	if ready then
@@ -584,7 +585,7 @@ function Matchmaker.spectate(player: Player, action: string?)
 	local remote = Remotes.get("Spectate")
 	if #list == 0 then
 		spectatorIndex[player] = nil
-		remote:FireClient(player, { ok = false, message = "Арены не найдены" })
+		remote:FireClient(player, { ok = false, message = Locale.forPlayer(player, "Arenas were not found") })
 		return
 	end
 	local idx = spectatorIndex[player] or 0
@@ -692,28 +693,28 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 			return
 		end
 		if from:GetAttribute("InMatch") ~= nil or target:GetAttribute("InMatch") ~= nil then
-			notice(from, "Игрок уже в матче")
+			notice(from, "That player is already in a match")
 			return
 		end
 		local party = parties[from]
 		if party and party.leader ~= from then
-			notice(from, "Приглашает только лидер")
+			notice(from, "Only the leader can invite")
 			return
 		end
 		if party and parties[target] == party then
-			notice(from, "Уже в пати")
+			notice(from, "Already in the party")
 			return
 		end
 		local size = if party then #party.members else 1
 		if size >= Config.MAX_PLAYERS_PER_MATCH then
-			notice(from, "Пати полное")
+			notice(from, "Party is full")
 			return
 		end
 		invites[target] = from
 		Remotes.get("PartyState"):FireClient(target, {
 			invite = { id = from.UserId, name = from.DisplayName },
 		})
-		notice(from, "Приглашение отправлено")
+		notice(from, "Invite sent")
 	end
 
 	local function accept(target: Player)
@@ -721,12 +722,12 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 		invites[target] = nil
 		Remotes.get("PartyState"):FireClient(target, { invite = false })
 		if not from or not from.Parent or from == target then
-			notice(target, "Приглашение уже не действует")
+			notice(target, "That invite is no longer valid")
 			return
 		end
 		local party = parties[from]
 		if party and party.leader ~= from then
-			notice(target, "Приглашение уже не действует")
+			notice(target, "That invite is no longer valid")
 			return
 		end
 		local err = addToParty(from, target)
@@ -765,15 +766,15 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 			end
 			local host = inviterFromJoin(player)
 			if not host or host == player then
-				notice(player, "Друг уже вышел с сервера")
+				notice(player, "Your friend already left the server")
 				return
 			end
 			local err = addToParty(host, player)
 			if err then
 				notice(player, err)
 			else
-				notice(player, "Ты в пати с " .. host.DisplayName)
-				notice(host, player.DisplayName .. " теперь в пати")
+				notice(player, Locale.forPlayer(player, "You are in a party with %s", host.DisplayName))
+				notice(host, Locale.forPlayer(host, "%s joined the party", player.DisplayName))
 			end
 		end)
 	end
@@ -784,18 +785,18 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 		end
 		local party = parties[player]
 		if party and #party.members >= Config.MAX_PLAYERS_PER_MATCH then
-			notice(player, "Пати полное")
+			notice(player, "Party is full")
 			return
 		end
 		if #Players:GetPlayers() >= Players.MaxPlayers then
-			notice(player, "Сервер полный. Если друг уже играет, нажми «К нему»")
+			notice(player, "Server is full. If your friend is already playing, press Join them")
 			return
 		end
 		local allowed, canSend = pcall(function()
 			return SocialService:CanSendGameInviteAsync(player)
 		end)
 		if not allowed or canSend ~= true then
-			notice(player, "Приглашение друзей откроется в опубликованной игре")
+			notice(player, "Friend invites open in a published game")
 			return
 		end
 		local created, options = pcall(function()
@@ -806,11 +807,11 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 				SocialService:PromptGameInvite(player)
 			end)
 			if not plain then
-				notice(player, "Не удалось открыть приглашение")
+				notice(player, "Couldn't open the invite")
 			end
 			return
 		end
-		options.PromptMessage = "Заходи в Color Party, сыграем вместе"
+		options.PromptMessage = Locale.forPlayer(player, "Come play Color Party with me")
 		options.LaunchData = "party:" .. tostring(player.UserId)
 		local old = inviteOptions[player]
 		if old then
@@ -823,7 +824,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 		if not prompted then
 			inviteOptions[player] = nil
 			options:Destroy()
-			notice(player, "Не удалось открыть приглашение")
+			notice(player, "Couldn't open the invite")
 		end
 	end
 
@@ -834,7 +835,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 		if typeof(item.Username) == "string" then
 			return item.Username
 		end
-		return "Друг"
+		return "Friend"
 	end
 
 	local function locateFriends(player: Player)
@@ -895,12 +896,12 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 
 	local function joinFriend(player: Player, friendId: number)
 		if player:GetAttribute("InMatch") ~= nil then
-			notice(player, "Сначала выйди из матча")
+			notice(player, "Leave the match first")
 			return
 		end
 		local known = locatedFriends[player]
 		if not known or not known[friendId] then
-			notice(player, "Друг уже не на другом сервере")
+			notice(player, "Your friend is no longer on another server")
 			return
 		end
 		local placeId: number? = nil
@@ -911,7 +912,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 			jobId = foundJob
 		end)
 		if not got or placeId ~= game.PlaceId or typeof(jobId) ~= "string" or jobId == game.JobId then
-			notice(player, "Друг уже не на другом сервере")
+			notice(player, "Your friend is no longer on another server")
 			return
 		end
 		local options = Instance.new("TeleportOptions")
@@ -922,7 +923,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 		end)
 		if not teleported then
 			options:Destroy()
-			notice(player, "Не удалось перейти к другу")
+			notice(player, "Couldn't join your friend")
 		end
 	end
 
@@ -948,7 +949,7 @@ function Matchmaker.init(arenasFolder: Folder, console: Instance?)
 			local target = playerById(userId)
 			if party and party.leader == player and target and parties[target] == party and target ~= player then
 				leaveParty(target)
-				notice(target, "Лидер убрал тебя из пати")
+				notice(target, "The leader removed you from the party")
 				broadcast()
 			end
 		elseif action == "robloxInvite" then

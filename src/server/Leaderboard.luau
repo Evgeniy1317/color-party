@@ -35,7 +35,7 @@ local function username(userId: number): string
 	local ok, result = pcall(function()
 		return Players:GetNameFromUserIdAsync(userId)
 	end)
-	local shown = if ok and typeof(result) == "string" then result else "Игрок"
+	local shown = if ok and typeof(result) == "string" then result else "Player"
 	names[userId] = shown
 	return shown
 end
@@ -130,6 +130,10 @@ local function publish(player: Player)
 	pcall(function()
 		(store :: OrderedDataStore):SetAsync(tostring(player.UserId), wins)
 	end)
+end
+
+function Leaderboard.flush(player: Player)
+	publish(player)
 end
 
 function Leaderboard.changed(player: Player)

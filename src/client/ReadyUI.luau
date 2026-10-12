@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 local player = Players.LocalPlayer
@@ -59,12 +60,12 @@ title.Position = UDim2.fromOffset(18, 12)
 title.Size = UDim2.new(1, -36, 0, 20)
 title.TextXAlignment = Enum.TextXAlignment.Left
 
-local queueText = label(panel, "В очереди: 0 / " .. Config.MAX_PLAYERS_PER_MATCH, 15, Enum.Font.GothamMedium, Color3.fromRGB(226, 228, 240))
+local queueText = label(panel, Locale.fmt("In queue: %d / %d", 0, Config.MAX_PLAYERS_PER_MATCH), 15, Enum.Font.GothamMedium, Color3.fromRGB(226, 228, 240))
 queueText.Position = UDim2.fromOffset(18, 34)
 queueText.Size = UDim2.new(1, -36, 0, 20)
 queueText.TextXAlignment = Enum.TextXAlignment.Left
 
-local statusText = label(panel, "Арены свободны", 13, Enum.Font.Gotham, Color3.fromRGB(180, 186, 210))
+local statusText = label(panel, Locale.t("Arenas are open"), 13, Enum.Font.Gotham, Color3.fromRGB(180, 186, 210))
 statusText.Position = UDim2.fromOffset(18, 54)
 statusText.Size = UDim2.new(1, -36, 0, 18)
 statusText.TextXAlignment = Enum.TextXAlignment.Left
@@ -77,7 +78,7 @@ readyButton.BackgroundColor3 = ACCENT_OFF
 readyButton.Font = Enum.Font.GothamBlack
 readyButton.TextSize = 22
 readyButton.TextColor3 = Color3.fromRGB(40, 38, 54)
-readyButton.Text = "ГОТОВ"
+readyButton.Text = Locale.t("READY")
 readyButton.AutoButtonColor = true
 readyButton.Parent = panel
 corner(readyButton, 14)
@@ -90,7 +91,7 @@ autoButton.BackgroundColor3 = Color3.fromRGB(60, 58, 80)
 autoButton.Font = Enum.Font.GothamMedium
 autoButton.TextSize = 13
 autoButton.TextColor3 = Color3.fromRGB(226, 228, 240)
-autoButton.Text = "☐  Авто-готов"
+autoButton.Text = "☐  " .. Locale.t("Auto-ready")
 autoButton.Parent = panel
 corner(autoButton, 10)
 
@@ -108,7 +109,7 @@ partyButton.BackgroundColor3 = Color3.fromRGB(124, 112, 214)
 partyButton.Font = Enum.Font.GothamBold
 partyButton.TextSize = 15
 partyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-partyButton.Text = "Пати"
+partyButton.Text = Locale.t("Party")
 partyButton.AutoButtonColor = true
 partyButton.Parent = panel
 corner(partyButton, 10)
@@ -116,20 +117,20 @@ watchButton.BackgroundColor3 = Color3.fromRGB(60, 58, 80)
 watchButton.Font = Enum.Font.GothamMedium
 watchButton.TextSize = 13
 watchButton.TextColor3 = Color3.fromRGB(226, 228, 240)
-watchButton.Text = "▶  Смотреть арену"
+watchButton.Text = "▶  " .. Locale.t("Watch arena")
 watchButton.Parent = panel
 corner(watchButton, 10)
 
 local function refreshButtons()
 	local launching = player:GetAttribute("PartyLaunch") == true
 	if launching then
-		readyButton.Text = "ИЩЕМ АРЕНУ"
+		readyButton.Text = Locale.t("FINDING ARENA")
 	else
-		readyButton.Text = if ready then "ОТМЕНА" else "ГОТОВ"
+		readyButton.Text = if ready then Locale.t("CANCEL") else Locale.t("READY")
 	end
 	local face = if launching then Color3.fromRGB(255, 196, 80) elseif ready then ACCENT else ACCENT_OFF
 	TweenService:Create(readyButton, TweenInfo.new(0.2), { BackgroundColor3 = face }):Play()
-	autoButton.Text = (if auto then "☑" else "☐") .. "  Авто-готов"
+	autoButton.Text = (if auto then "☑" else "☐") .. "  " .. Locale.t("Auto-ready")
 	autoButton.BackgroundColor3 = if auto then Color3.fromRGB(88, 150, 110) else Color3.fromRGB(60, 58, 80)
 end
 
@@ -209,8 +210,8 @@ local function smallButton(parent: Instance, text: string, x: number, color: Col
 	return button
 end
 
-local acceptButton = smallButton(inviteBar, "Да", 168, Color3.fromRGB(70, 176, 112))
-local declineButton = smallButton(inviteBar, "Нет", 230, Color3.fromRGB(196, 78, 92))
+local acceptButton = smallButton(inviteBar, Locale.t("Yes"), 168, Color3.fromRGB(70, 176, 112))
+local declineButton = smallButton(inviteBar, Locale.t("No"), 230, Color3.fromRGB(196, 78, 92))
 
 local partyList = Instance.new("Frame")
 partyList.Name = "PartyList"
@@ -226,7 +227,7 @@ corner(partyList, 16)
 
 partyList.Size = UDim2.fromOffset(300, 268)
 
-local listTitle = label(partyList, "Пати", 15, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
+local listTitle = label(partyList, Locale.t("Party"), 15, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
 listTitle.Position = UDim2.fromOffset(14, 8)
 listTitle.Size = UDim2.new(1, -28, 0, 20)
 listTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -239,7 +240,7 @@ inviteFriend.BackgroundColor3 = Color3.fromRGB(70, 186, 112)
 inviteFriend.Font = Enum.Font.GothamBold
 inviteFriend.TextSize = 15
 inviteFriend.TextColor3 = Color3.fromRGB(255, 255, 255)
-inviteFriend.Text = "Пригласить друга"
+inviteFriend.Text = Locale.t("Invite a friend")
 inviteFriend.AutoButtonColor = true
 inviteFriend.Parent = partyList
 corner(inviteFriend, 10)
@@ -291,10 +292,10 @@ end
 
 local function refreshPartyButton()
 	if #partyMembers >= 2 then
-		partyButton.Text = "Пати  ·  " .. #partyMembers
+		partyButton.Text = Locale.fmt("Party  ·  %d", #partyMembers)
 		partyButton.BackgroundColor3 = Color3.fromRGB(98, 86, 196)
 	else
-		partyButton.Text = "Пати"
+		partyButton.Text = Locale.t("Party")
 		partyButton.BackgroundColor3 = Color3.fromRGB(124, 112, 214)
 	end
 end
@@ -350,13 +351,13 @@ local function refreshPartyList()
 	local ids = memberIds()
 	if #partyMembers >= 2 then
 		for _, member in partyMembers do
-			local titleText = member.name .. (if member.leader then "  ·  лидер" else "")
+			local titleText = member.name .. (if member.leader then "  ·  " .. Locale.t("leader") else "")
 			if member.id == player.UserId then
-				titleText = "Ты" .. (if member.leader then "  ·  лидер" else "")
+				titleText = Locale.t("You") .. (if member.leader then "  ·  " .. Locale.t("leader") else "")
 				addRow(order, titleText, nil, nil)
 			elseif amLeader() then
 				local userId = member.id
-				addRow(order, titleText, "Убрать", function()
+				addRow(order, titleText, Locale.t("Kick"), function()
 					Remotes.get("Party"):FireServer("kick", userId)
 				end)
 			else
@@ -364,7 +365,7 @@ local function refreshPartyList()
 			end
 			order += 1
 		end
-		addRow(order, "Выйти из пати", "Выйти", function()
+		addRow(order, Locale.t("Leave the party"), Locale.t("Leave"), function()
 			Remotes.get("Party"):FireServer("leave")
 			listOpen = false
 			partyList.Visible = false
@@ -372,19 +373,19 @@ local function refreshPartyList()
 		order += 1
 	end
 	if #elsewhere > 0 then
-		addRow(order, "Друзья на других серверах", nil, nil)
+		addRow(order, Locale.t("Friends on other servers"), nil, nil)
 		order += 1
 		for _, friend in elsewhere do
 			if not ids[friend.id] then
 				local userId = friend.id
-				addRow(order, friend.name, "К нему", function()
+				addRow(order, friend.name, Locale.t("Join them"), function()
 					Remotes.get("Party"):FireServer("joinFriend", userId)
 				end)
 				order += 1
 			end
 		end
 	elseif searchingFriends then
-		addRow(order, "Ищем друзей в игре...", nil, nil)
+		addRow(order, Locale.t("Looking for friends in game..."), nil, nil)
 		order += 1
 	end
 	if amLeader() then
@@ -392,12 +393,12 @@ local function refreshPartyList()
 		for _, other in Players:GetPlayers() do
 			if other ~= player and not ids[other.UserId] and other:GetAttribute("InMatch") == nil then
 				if not found then
-					addRow(order, "Кто уже в этом лобби", nil, nil)
+					addRow(order, Locale.t("People already in this lobby"), nil, nil)
 					order += 1
 					found = true
 				end
 				local userId = other.UserId
-				addRow(order, other.DisplayName, "Звать", function()
+				addRow(order, other.DisplayName, Locale.t("Invite"), function()
 					Remotes.get("Party"):FireServer("invite", userId)
 				end)
 				order += 1
@@ -415,11 +416,11 @@ local function refreshPartyList()
 			hint.TextXAlignment = Enum.TextXAlignment.Left
 			hint.TextYAlignment = Enum.TextYAlignment.Top
 			hint.TextWrapped = true
-			hint.Text = "Нажми «Пригласить друга». Ему придёт уведомление Roblox, он зайдёт на этот сервер и сразу попадёт в пати."
+			hint.Text = Locale.t("Tap Invite a friend. They get a Roblox notification, join this server, and land in the party.")
 			hint.Parent = scroll
 		end
 	elseif #partyMembers >= 2 then
-		addRow(order, "Приглашает только лидер", nil, nil)
+		addRow(order, Locale.t("Only the leader can invite"), nil, nil)
 	end
 end
 
@@ -510,12 +511,12 @@ Remotes.get("PartyState").OnClientEvent:Connect(function(data)
 		inviteBar.Visible = false
 		placePartyPopups()
 	elseif typeof(data.invite) == "table" and typeof(data.invite.name) == "string" then
-		inviteText.Text = data.invite.name .. " зовёт в пати"
+		inviteText.Text = Locale.fmt("%s invites you to a party", data.invite.name)
 		inviteBar.Visible = panel.Visible
 		placePartyPopups()
 	end
 	if typeof(data.notice) == "string" then
-		showNotice(data.notice)
+		showNotice(Locale.translate(data.notice))
 		ready = player:GetAttribute("Ready") == true
 		refreshButtons()
 	end
@@ -531,24 +532,24 @@ end)
 Remotes.get("QueueUpdate").OnClientEvent:Connect(function(data)
 	if player:GetAttribute("PartyLaunch") == true then
 		local count = math.max(#partyMembers, 2)
-		queueText.Text = "Пати из " .. tostring(count) .. " · без очереди"
+		queueText.Text = Locale.fmt("Party of %d · no queue", count)
 		if os.clock() >= noticeUntil then
-			statusText.Text = "Ищем свободную арену"
+			statusText.Text = Locale.t("Looking for a free arena")
 		end
 		refreshButtons()
 		return
 	end
-	queueText.Text = "В очереди: " .. tostring(data.count) .. " / " .. tostring(data.max)
+	queueText.Text = Locale.fmt("In queue: %d / %d", data.count, data.max)
 	local status
 	if data.waitingArena then
-		status = "Все арены заняты — ждём свободную"
+		status = Locale.t("Every arena is full — waiting for one")
 	elseif #data.active > 0 then
-		status = "Идёт матчей: " .. #data.active .. " из " .. tostring(data.arenas)
+		status = Locale.fmt("Matches running: %d of %d", #data.active, data.arenas)
 	else
-		status = "Арены свободны"
+		status = Locale.t("Arenas are open")
 	end
 	if data.timeLeft and data.count > 0 then
-		status ..= "  ·  старт через " .. math.ceil(data.timeLeft) .. " с"
+		status ..= Locale.fmt("  ·  starting in %d s", math.ceil(data.timeLeft))
 	end
 	if os.clock() >= noticeUntil then
 		statusText.Text = status

@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 local SpectatorCam = require(script.Parent:WaitForChild("SpectatorCam"))
@@ -46,7 +47,7 @@ end
 
 local function nameOf(id: string): string
 	local def = Config.COLOR_BY_ID[id]
-	return if def then def.name else id
+	return if def then Locale.t(def.name) else id
 end
 
 local function textOn(color: Color3): Color3
@@ -104,19 +105,19 @@ local swatchMark = label(swatch, "Mark", "", 32, Enum.Font.GothamBlack, WHITE)
 swatchMark.Size = UDim2.fromScale(1, 1)
 swatchMark.ZIndex = 2
 
-local roundLabel = label(card, "Round", "РАУНД 1", 12, Enum.Font.GothamBold, MUTED)
+local roundLabel = label(card, "Round", Locale.fmt("ROUND %d", 1), 12, Enum.Font.GothamBold, MUTED)
 roundLabel.Position = UDim2.fromOffset(102, 8)
 roundLabel.Size = UDim2.fromOffset(180, 16)
 roundLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local nameLabel = label(card, "Name", "СИНИЙ", 22, Enum.Font.GothamBlack, WHITE)
+local nameLabel = label(card, "Name", Locale.t("BLUE"), 22, Enum.Font.GothamBlack, WHITE)
 nameLabel.Position = UDim2.fromOffset(102, 24)
 nameLabel.Size = UDim2.fromOffset(200, 28)
 nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 nameLabel.TextYAlignment = Enum.TextYAlignment.Center
 nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
-local subLabel = label(card, "Sub", "Встань на этот цвет!", 13, Enum.Font.GothamMedium, MUTED)
+local subLabel = label(card, "Sub", Locale.t("Stand on this color!"), 13, Enum.Font.GothamMedium, MUTED)
 subLabel.Position = UDim2.fromOffset(102, 52)
 subLabel.Size = UDim2.fromOffset(210, 16)
 subLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -155,7 +156,7 @@ status.Visible = false
 status.Parent = gui
 corner(status, 12)
 
-local aliveLabel = label(status, "Alive", "Осталось 5 / 5", 14, Enum.Font.GothamBold, WHITE)
+local aliveLabel = label(status, "Alive", Locale.fmt("Left %d / %d", 5, 5), 14, Enum.Font.GothamBold, WHITE)
 aliveLabel.Position = UDim2.fromOffset(12, 0)
 aliveLabel.Size = UDim2.fromOffset(150, 34)
 aliveLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -164,7 +165,7 @@ local livesLabel = label(status, "Lives", "♥  ♥", 16, Enum.Font.GothamBlack,
 livesLabel.Position = UDim2.fromOffset(156, 0)
 livesLabel.Size = UDim2.fromOffset(70, 34)
 
-local streakLabel = label(status, "Streak", "Серия  ×1.0", 14, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
+local streakLabel = label(status, "Streak", Locale.fmt("Streak ×%.1f", 1), 14, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
 streakLabel.AnchorPoint = Vector2.new(1, 0)
 streakLabel.Position = UDim2.new(1, -12, 0, 0)
 streakLabel.Size = UDim2.fromOffset(140, 34)
@@ -239,7 +240,7 @@ results.BorderSizePixel = 0
 results.Visible = false
 results.Parent = gui
 corner(results, 24)
-local resultsTitle = label(results, "Title", "ПОБЕДИТЕЛЬ", 22, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
+local resultsTitle = label(results, "Title", Locale.t("WINNER"), 22, Enum.Font.GothamBold, Color3.fromRGB(255, 214, 120))
 resultsTitle.Position = UDim2.fromOffset(0, 18)
 resultsTitle.Size = UDim2.new(1, 0, 0, 28)
 local resultsWinner = label(results, "Winner", "", 40, Enum.Font.GothamBlack, WHITE)
@@ -256,7 +257,7 @@ local resultsLayout = Instance.new("UIListLayout")
 resultsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 resultsLayout.Padding = UDim.new(0, 4)
 resultsLayout.Parent = resultsList
-local resultsHint = label(results, "Hint", "Возвращение в лобби…", 15, Enum.Font.GothamMedium, MUTED)
+local resultsHint = label(results, "Hint", Locale.t("Returning to the lobby…"), 15, Enum.Font.GothamMedium, MUTED)
 resultsHint.AnchorPoint = Vector2.new(0.5, 1)
 resultsHint.Position = UDim2.new(0.5, 0, 1, -14)
 resultsHint.Size = UDim2.new(1, 0, 0, 20)
@@ -326,10 +327,10 @@ local function setCard(shown: { string }, mode: string, round: number, excluded:
 	swatch.BackgroundColor3 = color
 	swatchB.Visible = false
 	swatchMark.Text = ""
-	roundLabel.Text = "РАУНД " .. round
+	roundLabel.Text = Locale.fmt("ROUND %d", round)
 	if mode == "exclude" then
-		nameLabel.Text = "КРОМЕ: " .. nameOf(excluded or primary)
-		subLabel.Text = "Встань на ЛЮБОЙ другой цвет!"
+		nameLabel.Text = Locale.fmt("EXCEPT: %s", nameOf(excluded or primary))
+		subLabel.Text = Locale.t("Stand on ANY other color!")
 		swatchMark.Text = "✕"
 		swatchMark.TextColor3 = textOn(color)
 	elseif mode == "double" and shown[2] then
@@ -340,10 +341,10 @@ local function setCard(shown: { string }, mode: string, round: number, excluded:
 		swatchB.Size = UDim2.fromOffset(38, 80)
 		swatchB.BackgroundColor3 = colorFrom(colors, 2, shown[2])
 		nameLabel.Text = nameOf(shown[1]) .. " / " .. nameOf(shown[2])
-		subLabel.Text = "Подойдёт любой из двух цветов"
+		subLabel.Text = Locale.t("Either color works")
 	else
 		nameLabel.Text = nameOf(primary)
-		subLabel.Text = "Встань на этот цвет!"
+		subLabel.Text = Locale.t("Stand on this color!")
 	end
 	nameLabel.TextColor3 = WHITE
 	card.Visible = true
@@ -363,7 +364,7 @@ end
 local function updateStreak()
 	local streak = player:GetAttribute("Streak")
 	local value = if typeof(streak) == "number" then streak else 0
-	streakLabel.Text = string.format("Серия ×%.1f", 1 + value * Config.ECONOMY.STREAK_STEP)
+	streakLabel.Text = Locale.fmt("Streak ×%.1f", 1 + value * Config.ECONOMY.STREAK_STEP)
 	if value >= 3 then
 		streakLabel.TextColor3 = Color3.fromRGB(255, 160, 80)
 	else
@@ -377,7 +378,7 @@ player:GetAttributeChangedSignal("Lives"):Connect(function()
 	if before ~= livesLabel.Text and player:GetAttribute("Lives") == 1 then
 		Effects.play("fall")
 		Effects.flash(Color3.fromRGB(255, 120, 120), 0.35, 0.6)
-		showBanner("МИНУС ЖИЗНЬ", "Ты на нижнем этаже. Ещё одно падение — вылет!", Color3.fromRGB(255, 130, 140), 2.2)
+		showBanner(Locale.t("LIFE LOST"), Locale.t("You're on the lower floor. One more fall and you're out!"), Color3.fromRGB(255, 130, 140), 2.2)
 	end
 end)
 player:GetAttributeChangedSignal("Streak"):Connect(updateStreak)
@@ -388,11 +389,12 @@ player:GetAttributeChangedSignal("Shield"):Connect(function()
 end)
 
 local function addFeed(text: string, kind: string)
-	local spawnNote = string.find(text, "подбери", 1, true) ~= nil
+	local shown = Locale.translate(text)
+	local spawnNote = string.find(shown, "pick", 1, true) ~= nil or string.find(text, "подбери", 1, true) ~= nil
 	if kind ~= "out" and not spawnNote then
 		return
 	end
-	local dash = string.find(text, "молни", 1, true) ~= nil
+	local dash = string.find(string.lower(shown), "dash", 1, true) ~= nil or string.find(text, "молни", 1, true) ~= nil
 	local accent = if kind == "out"
 		then Color3.fromRGB(255, 96, 112)
 		elseif dash then Color3.fromRGB(255, 168, 64)
@@ -425,12 +427,12 @@ local function addFeed(text: string, kind: string)
 	caption.TextWrapped = false
 	caption.TextStrokeTransparency = 1
 	caption.TextColor3 = Color3.fromRGB(244, 246, 252)
-	caption.Text = text
+	caption.Text = shown
 	caption.Parent = item
 	if spawnNote then
-		local title = if dash then "Рывок" else "Щит"
+		local title = if dash then Locale.t("Dash") else Locale.t("Shield")
 		Effects.play("bonus")
-		showBanner(title, text, accent, 2.2)
+		showBanner(title, shown, accent, 2.2)
 	end
 	local notes = 0
 	for _, child in feed:GetChildren() do
@@ -473,8 +475,8 @@ end
 
 local function showResults(data: { [string]: any })
 	local winners = data.winners :: { string }
-	resultsWinner.Text = if #winners == 0 then "НИЧЬЯ" else table.concat(winners, ", ")
-	resultsTitle.Text = if #winners > 1 then "ПОБЕДИТЕЛИ" elseif #winners == 0 then "МАТЧ ОКОНЧЕН" else "ПОБЕДИТЕЛЬ"
+	resultsWinner.Text = if #winners == 0 then Locale.t("DRAW") else table.concat(winners, ", ")
+	resultsTitle.Text = if #winners > 1 then Locale.t("WINNERS") elseif #winners == 0 then Locale.t("MATCH OVER") else Locale.t("WINNER")
 	for _, child in resultsList:GetChildren() do
 		if child:IsA("GuiObject") then
 			child:Destroy()
@@ -490,7 +492,7 @@ local function showResults(data: { [string]: any })
 		line.TextSize = 15
 		line.TextXAlignment = Enum.TextXAlignment.Left
 		line.TextColor3 = if row.winner then Color3.fromRGB(40, 38, 54) else WHITE
-		line.Text = string.format("  %d.  %s   ·   раундов: %d", row.place, row.name, row.rounds)
+		line.Text = Locale.fmt("  %d.  %s   ·   rounds: %d", row.place, row.name, row.rounds)
 		line.LayoutOrder = index
 		line.Parent = resultsList
 		corner(line, 8)
@@ -522,9 +524,9 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 		SpectatorCam.stop(true)
 		updateLives()
 		updateStreak()
-		showBanner("ПРИГОТОВЬТЕСЬ", "Игроков: " .. tostring(data.total) .. "  ·  встань на цвет с карточки до конца таймера", WHITE, data.timeLeft)
+		showBanner(Locale.t("GET READY"), Locale.fmt("Players: %d  ·  stand on the card color before the timer ends", data.total), WHITE, data.timeLeft)
 		status.Visible = true
-		aliveLabel.Text = "Игроков " .. tostring(data.total)
+		aliveLabel.Text = Locale.fmt("Players %d", data.total)
 	elseif phase == "show" then
 		if knockedOut then
 			return
@@ -532,13 +534,13 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 		banner.Visible = false
 		results.Visible = false
 		setCard(data.shown, data.mode, data.round, data.excluded, data.colors)
-		aliveLabel.Text = "Осталось " .. tostring(data.alive) .. " / " .. tostring(data.total)
+		aliveLabel.Text = Locale.fmt("Left %d / %d", data.alive, data.total)
 		startTimer(data.time, colorFrom(data.colors, 1, data.shown[1]))
 		Effects.play("go")
 		if data.mode == "exclude" then
-			showBanner("ЛЮБОЙ, КРОМЕ " .. nameOf(data.excluded), "Не стой на этом цвете!", colorOf(data.excluded), 1.6)
+			showBanner(Locale.fmt("ANYTHING BUT %s", nameOf(data.excluded)), Locale.t("Don't stand on that color!"), colorOf(data.excluded), 1.6)
 		elseif data.mode == "double" then
-			showBanner("ДВА ЦВЕТА", "Подойдёт любой из двух", WHITE, 1.4)
+			showBanner(Locale.t("TWO COLORS"), Locale.t("Either of the two works"), WHITE, 1.4)
 		end
 	elseif phase == "fake" then
 		if knockedOut then
@@ -546,13 +548,13 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 		end
 		local id = data.shown[1]
 		setCard(data.shown, "normal", tonumber(string.match(roundLabel.Text, "%d+")) or 0, nil, data.colors)
-		subLabel.Text = "СМЕНА ЦВЕТА!"
+		subLabel.Text = Locale.t("COLOR CHANGE!")
 		subLabel.TextColor3 = Color3.fromRGB(255, 110, 110)
 		startTimer(data.time, colorOf(id))
 		Effects.play("fake")
 		Effects.alertBorder(1.2)
 		Effects.shake(card, 10, 0.5)
-		showBanner("СМЕНА ЦВЕТА!", "Теперь нужен: " .. nameOf(id), colorOf(id), 1.4)
+		showBanner(Locale.t("COLOR CHANGE!"), Locale.fmt("Now you need: %s", nameOf(id)), colorOf(id), 1.4)
 		task.delay(1.5, function()
 			subLabel.TextColor3 = MUTED
 		end)
@@ -563,14 +565,14 @@ Remotes.get("MatchState").OnClientEvent:Connect(function(data)
 		stopTimer()
 		bar.Size = UDim2.fromScale(0, 1)
 		timeLabel.Text = "0.0"
-		subLabel.Text = "Плиты падают…"
+		subLabel.Text = Locale.t("Tiles are falling…")
 		Effects.play("drop")
 	elseif phase == "eliminated" then
 		knockedOut = true
 		hideAll()
 		Effects.play("out")
 		Effects.flash(Color3.fromRGB(255, 80, 90), 0.45, 0.8)
-		showBanner("ТЫ ВЫБЫЛ", "Место: " .. tostring(data.place) .. "  ·  смотри матч до конца или нажми X", Color3.fromRGB(255, 130, 140), 4)
+		showBanner(Locale.t("YOU'RE OUT"), Locale.fmt("Place: %d  ·  watch the match or press X", data.place), Color3.fromRGB(255, 130, 140), 4)
 		Remotes.get("Spectate"):FireServer("start")
 	elseif phase == "results" then
 		stopTimer()

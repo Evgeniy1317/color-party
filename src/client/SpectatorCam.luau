@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -91,7 +92,7 @@ local function ensureGui()
 	title.TextSize = 18
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Text = "ТРАНСЛЯЦИЯ"
+	title.Text = Locale.t("SPECTATING")
 	title.Parent = bar
 	titleLabel = title
 
@@ -135,7 +136,7 @@ local function ensureGui()
 	back.Font = Enum.Font.GothamBold
 	back.TextSize = 16
 	back.TextColor3 = Color3.fromRGB(40, 38, 54)
-	back.Text = "Назад  [X]"
+	back.Text = Locale.t("Back  [X]")
 	back.AutoButtonColor = true
 	back.Parent = bar
 	local backCorner = Instance.new("UICorner")
@@ -182,7 +183,7 @@ function SpectatorCam.apply(payload: SpectatePayload)
 			ensureGui()
 			gui.Enabled = true
 			if titleLabel then
-				titleLabel.Text = payload.message
+				titleLabel.Text = Locale.translate(payload.message)
 			end
 			if pageLabel then
 				pageLabel.Text = ""
@@ -225,8 +226,8 @@ function SpectatorCam.apply(payload: SpectatePayload)
 	local idx = payload.index or 1
 	local total = payload.total or 1
 	if titleLabel then
-		local state = if payload.active then "идёт матч" else "ожидание игроков"
-		titleLabel.Text = string.format("ТРАНСЛЯЦИЯ  ·  АРЕНА %d  ·  %s", slot + 1, state)
+		local state = if payload.active then Locale.t("match on") else Locale.t("waiting for players")
+		titleLabel.Text = Locale.fmt("SPECTATING  ·  ARENA %d  ·  %s", slot + 1, state)
 	end
 	if pageLabel then
 		pageLabel.Text = string.format("%d / %d", idx, total)

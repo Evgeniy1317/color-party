@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Economy = require(script.Parent:WaitForChild("Economy"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Matchmaker = require(script.Parent:WaitForChild("Matchmaker"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
@@ -404,7 +405,7 @@ end
 
 local function buy(player: Player, id: string)
 	if not canUseShop(player) then
-		pushState(player, "Магазин только в лобби")
+		pushState(player, Locale.forPlayer(player, "Shop is only in the lobby"))
 		return
 	end
 	if not Skins.get(id) and not Shop.get(id) then
@@ -413,12 +414,12 @@ local function buy(player: Player, id: string)
 	local listPrice = priceOf(id)
 	if Economy.ownsSkin(player, id) or listPrice <= 0 then
 		give(player, id)
-		pushState(player, "Готово: " .. nameOf(id))
+		pushState(player, Locale.forPlayer(player, "Done: %s", Locale.forPlayer(player, nameOf(id))))
 		return
 	end
 	local price = Economy.takeDiscount(player, listPrice)
 	if Economy.coins(player) < price then
-		pushState(player, "Не хватает монет")
+		pushState(player, Locale.forPlayer(player, "Not enough coins"))
 		return
 	end
 	Economy.addCoins(player, -price, "shop")
@@ -426,12 +427,12 @@ local function buy(player: Player, id: string)
 		Economy.spendDiscount(player)
 	end
 	give(player, id)
-	pushState(player, "Куплено: " .. nameOf(id))
+	pushState(player, Locale.forPlayer(player, "Bought: %s", Locale.forPlayer(player, nameOf(id))))
 end
 
 local function buyOnce(player: Player, id: string)
 	if not canUseShop(player) then
-		pushState(player, "Магазин только в лобби")
+		pushState(player, Locale.forPlayer(player, "Shop is only in the lobby"))
 		return
 	end
 	local item = Shop.get(id)
@@ -439,7 +440,7 @@ local function buyOnce(player: Player, id: string)
 		return
 	end
 	if Economy.ownsSkin(player, id) then
-		pushState(player, "Уже навсегда: " .. item.name)
+		pushState(player, Locale.forPlayer(player, "Already forever: %s", Locale.forPlayer(player, item.name)))
 		return
 	end
 	local listPrice = Shop.onceCoins(id)
@@ -448,7 +449,7 @@ local function buyOnce(player: Player, id: string)
 	end
 	local price = Economy.takeDiscount(player, listPrice)
 	if Economy.coins(player) < price then
-		pushState(player, "Не хватает монет")
+		pushState(player, Locale.forPlayer(player, "Not enough coins"))
 		return
 	end
 	Economy.addCoins(player, -price, "shop")
@@ -456,12 +457,12 @@ local function buyOnce(player: Player, id: string)
 		Economy.spendDiscount(player)
 	end
 	Economy.addCharge(player, id, 1)
-	pushState(player, "На 1 матч: " .. item.name)
+	pushState(player, Locale.forPlayer(player, "For 1 match: %s", Locale.forPlayer(player, item.name)))
 end
 
 local function buyRobuxOnce(player: Player, id: string)
 	if not canUseShop(player) then
-		pushState(player, "Магазин только в лобби")
+		pushState(player, Locale.forPlayer(player, "Shop is only in the lobby"))
 		return
 	end
 	local item = Shop.get(id)
@@ -469,12 +470,12 @@ local function buyRobuxOnce(player: Player, id: string)
 		return
 	end
 	if Economy.ownsSkin(player, id) then
-		pushState(player, "Уже навсегда: " .. item.name)
+		pushState(player, Locale.forPlayer(player, "Already forever: %s", Locale.forPlayer(player, item.name)))
 		return
 	end
 	local productId = Shop.productId(Shop.onceKey(id))
 	if productId <= 0 then
-		pushState(player, "Робуксы: создай Developer Product и впиши id в Shop под ключом " .. Shop.onceKey(id) .. ". Цена " .. tostring(Shop.onceRobux(id)) .. " R$")
+		pushState(player, Locale.forPlayer(player, "Robux: create a Developer Product and put its id in Shop under %s. Price %d R$", Shop.onceKey(id), Shop.onceRobux(id)))
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, productId)
@@ -482,7 +483,7 @@ end
 
 local function equip(player: Player, id: string)
 	if not canUseShop(player) then
-		pushState(player, "Магазин только в лобби")
+		pushState(player, Locale.forPlayer(player, "Shop is only in the lobby"))
 		return
 	end
 	local skin = Skins.get(id)
@@ -492,11 +493,11 @@ local function equip(player: Player, id: string)
 	end
 	local price = priceOf(id)
 	if not Economy.ownsSkin(player, id) and price > 0 then
-		pushState(player, "Сначала купи")
+		pushState(player, Locale.forPlayer(player, "Buy it first"))
 		return
 	end
 	give(player, id)
-	pushState(player, "Надето: " .. nameOf(id))
+	pushState(player, Locale.forPlayer(player, "Equipped: %s", Locale.forPlayer(player, nameOf(id))))
 end
 
 local function clear(player: Player)
@@ -506,7 +507,7 @@ local function clear(player: Player)
 	Economy.equipSkin(player, "")
 	restoreAvatar(player)
 	syncPerks(player)
-	pushState(player, "Скин снят")
+	pushState(player, Locale.forPlayer(player, "Skin taken off"))
 end
 
 local function clearTrail(player: Player)
@@ -517,12 +518,12 @@ local function clearTrail(player: Player)
 	if player.Character then
 		applyTrail(player, player.Character)
 	end
-	pushState(player, "След снят")
+	pushState(player, Locale.forPlayer(player, "Trail taken off"))
 end
 
 local function buyRobux(player: Player, id: string)
 	if not canUseShop(player) then
-		pushState(player, "Магазин только в лобби")
+		pushState(player, Locale.forPlayer(player, "Shop is only in the lobby"))
 		return
 	end
 	if not Skins.get(id) and not Shop.get(id) then
@@ -530,12 +531,12 @@ local function buyRobux(player: Player, id: string)
 	end
 	if Economy.ownsSkin(player, id) or priceOf(id) <= 0 then
 		give(player, id)
-		pushState(player, "Уже есть: " .. nameOf(id))
+		pushState(player, Locale.forPlayer(player, "Already owned: %s", Locale.forPlayer(player, nameOf(id))))
 		return
 	end
 	local productId = Shop.productId(id)
 	if productId <= 0 then
-		pushState(player, "Робуксы: создай Developer Product и впиши id в Shop.luau. Цена " .. tostring(Shop.robux(id)) .. " R$")
+		pushState(player, Locale.forPlayer(player, "Robux: create a Developer Product and put its id in Shop.luau. Price %d R$", Shop.robux(id)))
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, productId)
@@ -560,8 +561,8 @@ local function attachPrompt()
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "ShopPrompt"
-	prompt.ActionText = "Открыть"
-	prompt.ObjectText = "Магазин"
+	prompt.ActionText = "Open"
+	prompt.ObjectText = "Shop"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 16
@@ -614,15 +615,18 @@ function SkinShop.init()
 			elseif string.sub(itemId, -5) == "#once" then
 				local perkId = string.sub(itemId, 1, #itemId - 5)
 				Economy.addCharge(player, perkId, 1)
-				pushState(player, "На 1 матч за робуксы: " .. nameOf(perkId))
+				pushState(player, Locale.forPlayer(player, "For 1 match with Robux: %s", Locale.forPlayer(player, nameOf(perkId))))
 			elseif not Economy.ownsSkin(player, itemId) then
 				give(player, itemId)
-				pushState(player, "Куплено за робуксы: " .. nameOf(itemId))
+				pushState(player, Locale.forPlayer(player, "Bought with Robux: %s", Locale.forPlayer(player, nameOf(itemId))))
 			else
-				pushState(player, "Уже есть: " .. nameOf(itemId))
+				pushState(player, Locale.forPlayer(player, "Already owned: %s", Locale.forPlayer(player, nameOf(itemId))))
 			end
 		end
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+		if Economy.save(player) then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	Players.PlayerAdded:Connect(function(player)
 		watch(player)

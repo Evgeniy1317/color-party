@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Economy = require(script.Parent:WaitForChild("Economy"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
@@ -103,12 +104,13 @@ local function push(player: Player, notice: string?)
 			end
 			table.insert(free, {
 				id = row.id,
+				kind = def.kind,
 				name = def.name,
 				detail = def.detail,
 				goal = def.goal,
 				progress = row.progress,
 				claimed = row.claimed,
-				reward = money(def.coins) .. " монет",
+				reward = money(def.coins) .. " coins",
 				action = action,
 			})
 		end
@@ -128,6 +130,7 @@ local function push(player: Player, notice: string?)
 		end
 		table.insert(premium, {
 			id = def.id,
+			kind = def.kind,
 			name = def.name,
 			detail = def.detail,
 			goal = def.goal,
@@ -171,10 +174,10 @@ local function grantPassReward(player: Player, grant: Catalog.Grant): string
 		local pool = unowned(player, ids)
 		if #pool == 0 then
 			Economy.addCoins(player, 20000, "quest")
-			return "20 000 монет — все скины уже есть"
+			return "20,000 coins — you already have every skin"
 		end
 		local id = pool[Random.new():NextInteger(1, #pool)]
-		return "Скин: " .. grantItem(player, id)
+		return "Skin: " .. grantItem(player, id)
 	elseif grant == "trail" then
 		local ids = {}
 		for _, item in Shop.trails() do
@@ -183,17 +186,17 @@ local function grantPassReward(player: Player, grant: Catalog.Grant): string
 		local pool = unowned(player, ids)
 		if #pool == 0 then
 			Economy.addCoins(player, 12000, "quest")
-			return "12 000 монет — все следы уже есть"
+			return "12,000 coins — you already have every trail"
 		end
 		local id = pool[Random.new():NextInteger(1, #pool)]
-		return "След: " .. grantItem(player, id)
+		return "Trail: " .. grantItem(player, id)
 	elseif grant == "perk_shield" or grant == "perk_speed" then
 		local id = if grant == "perk_shield" then "perk_shield" else "perk_speed"
 		if Economy.ownsSkin(player, id) then
 			Economy.addCoins(player, 15000, "quest")
-			return "15 000 монет — плюшка уже есть"
+			return "15,000 coins — you already have that perk"
 		end
-		return "Плюшка: " .. grantItem(player, id)
+		return "Perk: " .. grantItem(player, id)
 	end
 	local ids = {}
 	for _, item in Shop.perks() do
@@ -202,10 +205,10 @@ local function grantPassReward(player: Player, grant: Catalog.Grant): string
 	local pool = unowned(player, ids)
 	if #pool == 0 then
 		Economy.addCoins(player, 25000, "quest")
-		return "25 000 монет — все плюшки уже есть"
+		return "25,000 coins — you already have every perk"
 	end
 	local id = pool[Random.new():NextInteger(1, #pool)]
-	return "Плюшка: " .. grantItem(player, id)
+	return "Perk: " .. grantItem(player, id)
 end
 
 local function finishIndex(): number
@@ -269,11 +272,11 @@ end
 function Quests.grantPass(player: Player)
 	local data = board(player)
 	if data and data.owned then
-		push(player, "Батл-пасс уже открыт")
+		push(player, Locale.forPlayer(player, "Battle Pass is already open"))
 		return
 	end
 	Economy.setBattlePass(player, true)
-	push(player, "Батл-пасс открыт")
+	push(player, Locale.forPlayer(player, "Battle Pass unlocked"))
 end
 
 local function attachPrompt()
@@ -295,8 +298,8 @@ local function attachPrompt()
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "QuestPrompt"
-	prompt.ActionText = "Открыть"
-	prompt.ObjectText = "Квесты"
+	prompt.ActionText = "Open"
+	prompt.ObjectText = "Quests"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 16
@@ -320,12 +323,12 @@ function Quests.init()
 				return
 			end
 			if data.owned then
-				push(player, "Батл-пасс уже открыт")
+				push(player, Locale.forPlayer(player, "Battle Pass is already open"))
 				return
 			end
 			local productId = Shop.productId(Catalog.PRODUCT_KEY)
 			if productId <= 0 then
-				push(player, "Робуксы: создай Developer Product на 300 R$ и впиши id в Shop под ключом battlepass")
+				push(player, Locale.forPlayer(player, "Robux: create a Developer Product for 300 R$ and put its id in Shop under battlepass"))
 				return
 			end
 			MarketplaceService:PromptProductPurchase(player, productId)
@@ -346,7 +349,7 @@ function Quests.init()
 				if row.id == id and not row.taken and not row.claimed then
 					row.taken = true
 					Economy.saveQuests(player)
-					push(player, "Задание взято")
+					push(player, Locale.forPlayer(player, "Quest taken"))
 					return
 				end
 			end
@@ -357,13 +360,13 @@ function Quests.init()
 					row.claimed = true
 					Economy.addCoins(player, def.coins, "quest")
 					Economy.saveQuests(player)
-					push(player, "Награда: " .. money(def.coins) .. " монет")
+					push(player, Locale.forPlayer(player, "Reward: %s coins", money(def.coins)))
 					return
 				end
 			end
 		elseif action == "claimBp" then
 			if not owned then
-				push(player, "Сначала открой батл-пасс")
+				push(player, Locale.forPlayer(player, "Unlock the Battle Pass first"))
 				return
 			end
 			local def = Catalog.passById(id)

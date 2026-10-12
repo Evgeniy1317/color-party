@@ -185,11 +185,11 @@ local function screenFace(screen: Part, face: Enum.NormalId, slot: number)
 	chipStroke.Color = Color3.fromRGB(255, 255, 255)
 	chipStroke.Parent = chip
 
-	label(panel, "Title", UDim2.fromScale(0.24, 0.06), UDim2.fromScale(0.72, 0.2), "COLOR PARTY  ·  АРЕНА " .. (slot + 1), 28, Color3.fromRGB(255, 214, 120), Enum.Font.GothamBold)
-	local main = label(panel, "Main", UDim2.fromScale(0.24, 0.28), UDim2.fromScale(0.72, 0.4), "ОЖИДАНИЕ ИГРОКОВ", 64, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
+	label(panel, "Title", UDim2.fromScale(0.24, 0.06), UDim2.fromScale(0.72, 0.2), "COLOR PARTY  ·  ARENA " .. (slot + 1), 28, Color3.fromRGB(255, 214, 120), Enum.Font.GothamBold)
+	local main = label(panel, "Main", UDim2.fromScale(0.24, 0.28), UDim2.fromScale(0.72, 0.4), "WAITING FOR PLAYERS", 64, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBlack)
 	main.TextScaled = true
 	main.TextXAlignment = Enum.TextXAlignment.Left
-	label(panel, "Sub", UDim2.fromScale(0.24, 0.7), UDim2.fromScale(0.72, 0.24), "Нажми ГОТОВ в лобби, чтобы сыграть", 30, Color3.fromRGB(220, 224, 240), Enum.Font.GothamMedium).TextXAlignment = Enum.TextXAlignment.Left
+	label(panel, "Sub", UDim2.fromScale(0.24, 0.7), UDim2.fromScale(0.72, 0.24), "Press READY in the lobby to play", 30, Color3.fromRGB(220, 224, 240), Enum.Font.GothamMedium).TextXAlignment = Enum.TextXAlignment.Left
 end
 
 -- Одна арена ---------------------------------------------------------------

@@ -7,10 +7,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
 
 local STORE_NAME = "ColorParty_v1"
+local LOCK_SECONDS = 45
+local JOB = if game.JobId ~= "" then game.JobId else ("studio-" .. tostring(math.floor(os.clock() * 1000)) .. "-" .. tostring(math.random(1, 1000000000)))
 
 type Profile = {
 	coins: number,
@@ -34,6 +37,7 @@ type Profile = {
 
 local Economy = {}
 local profiles: { [Player]: Profile } = {}
+local writable: { [Player]: boolean } = {}
 local store: DataStore? = nil
 
 pcall(function()
@@ -69,11 +73,11 @@ local function push(player: Player, delta: number, reason: string)
 	end
 	local stats = player:FindFirstChild("leaderstats")
 	if stats then
-		local coins = stats:FindFirstChild("Монеты")
+		local coins = stats:FindFirstChild("Coins") or stats:FindFirstChild("Монеты")
 		if coins and coins:IsA("IntValue") then
 			coins.Value = profile.coins
 		end
-		local wins = stats:FindFirstChild("Победы")
+		local wins = stats:FindFirstChild("Wins") or stats:FindFirstChild("Победы")
 		if wins and wins:IsA("IntValue") then
 			wins.Value = profile.wins
 		end
@@ -81,13 +85,80 @@ local function push(player: Player, delta: number, reason: string)
 	Remotes.get("Economy"):FireClient(player, { coins = profile.coins, delta = delta, reason = reason })
 end
 
+local function shallowCopy(old: any): { [string]: any }
+	local copy: { [string]: any } = {}
+	if typeof(old) == "table" then
+		for key, value in old do
+			copy[key] = value
+		end
+	end
+	return copy
+end
+
+local function lockedByOther(data: any): boolean
+	if typeof(data) ~= "table" then
+		return false
+	end
+	local session = data.session
+	if typeof(session) ~= "string" or session == "" or session == JOB then
+		return false
+	end
+	local at = tonumber(data.sessionAt) or 0
+	return os.time() - at < LOCK_SECONDS
+end
+
+-- Забирает сохранение этому серверу. "ok" можно писать, "locked" — его держит другой сервер, "error" — облако не ответило.
+local function claim(key: string): (any, string)
+	local snapshot: any = nil
+	local state = "error"
+	local ok = pcall(function()
+		(store :: DataStore):UpdateAsync(key, function(old)
+			if lockedByOther(old) then
+				state = "locked"
+				return nil
+			end
+			snapshot = old
+			local nextData = shallowCopy(old)
+			nextData.session = JOB
+			nextData.sessionAt = os.time()
+			state = "ok"
+			return nextData
+		end)
+	end)
+	if not ok then
+		return nil, "error"
+	end
+	return snapshot, state
+end
+
 local function load(player: Player)
 	local profile = defaultProfile()
-	if store then
-		local ok, data = pcall(function()
-			return (store :: DataStore):GetAsync("p_" .. player.UserId)
-		end)
-		if ok and typeof(data) == "table" then
+	local canSave = false
+	if not store then
+		if not RunService:IsStudio() then
+			player:Kick(Locale.forPlayer(player, "Couldn't load your save. Join again in a moment."))
+			return
+		end
+	else
+		local data: any = nil
+		local state = "error"
+		for _ = 1, 5 do
+			data, state = claim("p_" .. player.UserId)
+			if state ~= "locked" then
+				break
+			end
+			task.wait(2)
+		end
+		if state == "ok" then
+			canSave = true
+		elseif not RunService:IsStudio() then
+			local phrase = if state == "locked"
+				then "Your save is still open on another server. Wait a moment and join again."
+				else "Couldn't load your save. Join again in a moment."
+			player:Kick(Locale.forPlayer(player, phrase))
+			return
+		end
+		if canSave and typeof(data) == "table" then
 			profile.coins = tonumber(data.coins) or 0
 			profile.wins = tonumber(data.wins) or 0
 			profile.rounds = tonumber(data.rounds) or 0
@@ -150,20 +221,21 @@ local function load(player: Player)
 			end
 		end
 	end
-	-- Тестовый запас для владельца и для игры из Studio, чтобы можно было открыть дорогой магазин.
-	if (RunService:IsStudio() or player.UserId == 11660290381) and profile.coins < 1000000 then
+	-- Монеты для проверки магазина только когда облако недоступно (Studio без публикации). В игру они не пишутся.
+	if RunService:IsStudio() and not canSave and profile.coins < 1000000 then
 		profile.coins = 1000000
 	end
+	writable[player] = canSave
 	profiles[player] = profile
 
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
 	local coins = Instance.new("IntValue")
-	coins.Name = "Монеты"
+	coins.Name = "Coins"
 	coins.Value = profile.coins
 	coins.Parent = stats
 	local wins = Instance.new("IntValue")
-	wins.Name = "Победы"
+	wins.Name = "Wins"
 	wins.Value = profile.wins
 	wins.Parent = stats
 	stats.Parent = player
@@ -173,10 +245,10 @@ end
 
 local saveQueued: { [Player]: boolean } = {}
 
-local function save(player: Player)
+local function save(player: Player, release: boolean?): boolean
 	local profile = profiles[player]
-	if not profile or not store then
-		return
+	if not profile or not store or not writable[player] then
+		return false
 	end
 	local owned = {}
 	for id in profile.owned do
@@ -203,20 +275,31 @@ local function save(player: Player)
 		daily = profile.daily,
 		bpOwned = profile.bpOwned,
 		bp = profile.bp,
+		session = if release then "" else JOB,
+		sessionAt = if release then 0 else os.time(),
 	}
 	local key = "p_" .. player.UserId
 	for _ = 1, 3 do
+		local rejected = false
 		local ok = pcall(function()
-			(store :: DataStore):UpdateAsync(key, function()
+			(store :: DataStore):UpdateAsync(key, function(old)
+				if lockedByOther(old) then
+					rejected = true
+					return nil
+				end
 				return payload
 			end)
 		end)
-		if ok then
-			return
+		if ok and not rejected then
+			return true
+		end
+		if rejected then
+			break
 		end
 		task.wait(1)
 	end
-	warn("[ColorParty] не удалось сохранить монеты игрока " .. player.UserId)
+	warn("[ColorParty] не удалось сохранить прогресс игрока " .. player.UserId)
+	return false
 end
 
 local function queueSave(player: Player)
@@ -232,9 +315,9 @@ local function queueSave(player: Player)
 	end)
 end
 
-function Economy.save(player: Player)
+function Economy.save(player: Player): boolean
 	saveQueued[player] = nil
-	save(player)
+	return save(player, false)
 end
 
 function Economy.init()
@@ -244,7 +327,12 @@ function Economy.init()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		saveQueued[player] = nil
-		save(player)
+		local board = script.Parent:FindFirstChild("Leaderboard")
+		if board and board:IsA("ModuleScript") then
+			require(board).flush(player)
+		end
+		save(player, true)
+		writable[player] = nil
 		profiles[player] = nil
 	end)
 	game:BindToClose(function()
@@ -252,13 +340,24 @@ function Economy.init()
 		for _, player in Players:GetPlayers() do
 			left += 1
 			task.spawn(function()
-				save(player)
+				saveQueued[player] = nil
+				save(player, true)
 				left -= 1
 			end)
 		end
 		local started = os.clock()
-		while left > 0 and os.clock() - started < 8 do
+		while left > 0 and os.clock() - started < 20 do
 			task.wait(0.1)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(60)
+			for _, player in Players:GetPlayers() do
+				if writable[player] then
+					save(player, false)
+				end
+			end
 		end
 	end)
 end
@@ -307,6 +406,7 @@ function Economy.recordRounds(player: Player, rounds: number)
 	if profile then
 		profile.rounds += rounds
 		profile.best = math.max(profile.best, rounds)
+		queueSave(player)
 	end
 end
 

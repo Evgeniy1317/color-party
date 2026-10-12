@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -16,14 +17,7 @@ local BRONZE = Color3.fromRGB(214, 150, 96)
 local INK = Color3.fromRGB(14, 12, 22)
 
 local function winsWord(amount: number): string
-	local n10 = amount % 10
-	local n100 = amount % 100
-	if n10 == 1 and n100 ~= 11 then
-		return "победа"
-	elseif n10 >= 2 and n10 <= 4 and (n100 < 12 or n100 > 14) then
-		return "победы"
-	end
-	return "побед"
+	return Locale.wins(amount)
 end
 
 local function rankColor(place: number): Color3
@@ -146,7 +140,7 @@ local function row(parent: Instance, place: number, userId: number, name: string
 	score.TextSize = 20
 	score.TextXAlignment = Enum.TextXAlignment.Right
 	score.TextColor3 = if place <= 3 or mine then GOLD else WHITE
-	score.Text = tostring(wins) .. " " .. winsWord(wins)
+	score.Text = winsWord(wins)
 	score.Parent = box
 end
 
@@ -182,7 +176,7 @@ local function mount(host: BasePart)
 	title.TextSize = 60
 	title.TextXAlignment = Enum.TextXAlignment.Center
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.Text = "Лидеры"
+	title.Text = Locale.t("Leaders")
 	title.Parent = root
 	local titleTint = Instance.new("UIGradient")
 	titleTint.Rotation = 90
@@ -201,7 +195,7 @@ local function mount(host: BasePart)
 	subtitle.TextSize = 20
 	subtitle.TextXAlignment = Enum.TextXAlignment.Center
 	subtitle.TextColor3 = MUTED
-	subtitle.Text = "Победы в матчах"
+	subtitle.Text = Locale.t("Match wins")
 	subtitle.Parent = root
 
 	local line = Instance.new("Frame")
@@ -257,7 +251,8 @@ local function show(data: { [string]: any })
 				count += 1
 				local place = if typeof(entry.place) == "number" then entry.place else count
 				local userId = if typeof(entry.userId) == "number" then entry.userId else 0
-				local name = if typeof(entry.name) == "string" then entry.name else "Игрок"
+				local rawName = if typeof(entry.name) == "string" then entry.name else "Player"
+				local name = if rawName == "Player" or rawName == "Игрок" then Locale.t("Player") else rawName
 				local wins = if typeof(entry.wins) == "number" then entry.wins else 0
 				local mine = userId == player.UserId
 				row(list, place, userId, name, wins, mine, place)
@@ -270,7 +265,7 @@ local function show(data: { [string]: any })
 			empty.Font = Enum.Font.Gotham
 			empty.TextSize = 14
 			empty.TextColor3 = MUTED
-			empty.Text = "Пока нет побед"
+			empty.Text = Locale.t("No wins yet")
 			empty.Parent = list
 		end
 	end
@@ -278,7 +273,7 @@ local function show(data: { [string]: any })
 	if footer.Visible and typeof(me) == "table" then
 		local name = if typeof(me.name) == "string" then me.name else player.DisplayName
 		local wins = if typeof(me.wins) == "number" then me.wins else 0
-		row(footer, myPlace, player.UserId, name .. "  ·  ты", wins, true, 1)
+		row(footer, myPlace, player.UserId, name .. Locale.t("  ·  you"), wins, true, 1)
 	end
 end
 

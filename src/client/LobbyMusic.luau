@@ -3,6 +3,7 @@
 -- Треки из официального каталога Roblox (DistroKid), их можно использовать в игре.
 -- В матче у каждого игрока свой случайный трек, лобби звучит отдельно.
 
+local Hub = require(script.Parent:WaitForChild("Hub"))
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
@@ -89,8 +90,8 @@ local function sdCapsule(px: number, py: number, ax: number, ay: number, bx: num
 end
 
 local function sdFlag(px: number, py: number): number
-	local x0, y0 = 64, 24
-	local x1, y1 = 112, 20
+	local x0, y0 = 68, 30
+	local x1, y1 = 108, 22
 	local x2, y2 = 82, 58
 	local best = 1e9
 	for i = 0, 28 do
@@ -104,21 +105,41 @@ local function sdFlag(px: number, py: number): number
 			best = d
 		end
 	end
-	return 5.6 - best
+	return 6.2 - best
 end
 
-local function noteIcon(): ImageLabel
+local function plainMark(name: string, text: string, px: number): TextLabel
+	local mark = Instance.new("TextLabel")
+	mark.Name = name
+	mark.BackgroundTransparency = 1
+	mark.AnchorPoint = Vector2.new(0.5, 0.5)
+	mark.Position = UDim2.fromScale(0.5, 0.48)
+	mark.Size = UDim2.fromOffset(px, px)
+	mark.Font = Enum.Font.GothamBlack
+	mark.TextSize = px - 4
+	mark.TextColor3 = Color3.new(1, 1, 1)
+	mark.Text = text
+	mark.Active = false
+	return mark
+end
+
+local function noteIcon(): GuiObject
 	local n = 128
-	local editable = AssetService:CreateEditableImage({ Size = Vector2.new(n, n) })
+	local ok, editable = pcall(function()
+		return AssetService:CreateEditableImage({ Size = Vector2.new(n, n) })
+	end)
+	if not ok or editable == nil then
+		return plainMark("Note", "♪", 36)
+	end
 	local pixels = buffer.create(n * n * 4)
 	for y = 0, n - 1 do
 		for x = 0, n - 1 do
 			local cover = 0
 			for _, ox in { 0.25, 0.75 } do
 				for _, oy in { 0.25, 0.75 } do
-					local px, py = x + ox, y + oy
-					local head = sdEllipse(px, py, 50, 92, 20, 14.5, -0.45)
-					local stem = sdCapsule(px, py, 64, 84, 64, 24, 5)
+					local px, py = 64 + (x + ox - 64) / 1.08, 65 + (y + oy - 65) / 1.08
+					local head = sdEllipse(px, py, 50, 94, 20, 14, -0.4)
+					local stem = sdCapsule(px, py, 68, 86, 68, 30, 6.2)
 					local flag = sdFlag(px, py)
 					local d = math.max(head, stem, flag)
 					cover += math.clamp(d + 0.7, 0, 1)
@@ -137,8 +158,8 @@ local function noteIcon(): ImageLabel
 	icon.Name = "Note"
 	icon.BackgroundTransparency = 1
 	icon.AnchorPoint = Vector2.new(0.5, 0.5)
-	icon.Position = UDim2.fromScale(0.5, 0.52)
-	icon.Size = UDim2.fromOffset(30, 30)
+	icon.Position = UDim2.fromScale(0.5, 0.5)
+	icon.Size = UDim2.fromOffset(36, 36)
 	icon.ImageContent = Content.fromObject(editable)
 	icon.Active = false
 	return icon
@@ -160,6 +181,7 @@ menu.Parent = gui
 
 local layout = Instance.new("UIListLayout")
 layout.FillDirection = Enum.FillDirection.Horizontal
+layout.VerticalAlignment = Enum.VerticalAlignment.Center
 layout.Padding = UDim.new(0, 10)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.Parent = menu
@@ -376,65 +398,89 @@ local bagCorner = Instance.new("UICorner")
 bagCorner.CornerRadius = UDim.new(0, 14)
 bagCorner.Parent = bag
 
-local bodyIcon = Instance.new("Frame")
-bodyIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-bodyIcon.Position = UDim2.fromScale(0.5, 0.58)
-bodyIcon.Size = UDim2.fromOffset(22, 16)
-bodyIcon.BackgroundColor3 = Color3.fromRGB(92, 58, 18)
-bodyIcon.BorderSizePixel = 0
-bodyIcon.ZIndex = 4
-bodyIcon.Active = false
-bodyIcon.Parent = bag
-local bodyCorner = Instance.new("UICorner")
-bodyCorner.CornerRadius = UDim.new(0, 4)
-bodyCorner.Parent = bodyIcon
+local function sdRoundBox(px: number, py: number, cx: number, cy: number, hw: number, hh: number, radius: number): number
+	local qx = math.abs(px - cx) - hw + radius
+	local qy = math.abs(py - cy) - hh + radius
+	local ox = math.max(qx, 0)
+	local oy = math.max(qy, 0)
+	return radius - (math.sqrt(ox * ox + oy * oy) + math.min(math.max(qx, qy), 0))
+end
 
-local handle = Instance.new("Frame")
-handle.AnchorPoint = Vector2.new(0.5, 1)
-handle.Position = UDim2.new(0.5, 0, 0, 0)
-handle.Size = UDim2.fromOffset(12, 7)
-handle.BackgroundColor3 = Color3.fromRGB(92, 58, 18)
-handle.BorderSizePixel = 0
-handle.ZIndex = 4
-handle.Active = false
-handle.Parent = bodyIcon
-local handleCorner = Instance.new("UICorner")
-handleCorner.CornerRadius = UDim.new(0, 4)
-handleCorner.Parent = handle
+local function bagIcon(): GuiObject
+	local n = 128
+	local ok, editable = pcall(function()
+		return AssetService:CreateEditableImage({ Size = Vector2.new(n, n) })
+	end)
+	if not ok or editable == nil then
+		return plainMark("Bag", "[]", 36)
+	end
+	local pixels = buffer.create(n * n * 4)
+	for y = 0, n - 1 do
+		for x = 0, n - 1 do
+			local cover = 0
+			for _, ox in { 0.25, 0.75 } do
+				for _, oy in { 0.25, 0.75 } do
+					local px, py = 64 + (x + ox - 64) / 1.08, 65 + (y + oy - 65) / 1.08
+					local body = sdRoundBox(px, py, 64, 76, 33, 33, 15)
+					local pocket = sdRoundBox(px, py, 64, 90, 15, 10, 5)
+					local handle = sdCapsule(px, py, 42, 34, 86, 34, 11)
+					local hole = sdCapsule(px, py, 52, 34, 76, 34, 4.2)
+					local strapL = sdCapsule(px, py, 40, 42, 40, 58, 6)
+					local strapR = sdCapsule(px, py, 88, 42, 88, 58, 6)
+					local d = math.max(body, handle, strapL, strapR)
+					d = math.min(d, -hole, -pocket)
+					cover += math.clamp(d + 0.7, 0, 1)
+				end
+			end
+			local offset = (y * n + x) * 4
+			buffer.writeu8(pixels, offset, 255)
+			buffer.writeu8(pixels, offset + 1, 255)
+			buffer.writeu8(pixels, offset + 2, 255)
+			buffer.writeu8(pixels, offset + 3, math.floor(cover / 4 * 255 + 0.5))
+		end
+	end
+	editable:WritePixelsBuffer(Vector2.zero, Vector2.new(n, n), pixels)
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "Bag"
+	icon.BackgroundTransparency = 1
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.fromScale(0.5, 0.5)
+	icon.Size = UDim2.fromOffset(36, 36)
+	icon.ImageContent = Content.fromObject(editable)
+	icon.Active = false
+	icon.ZIndex = 4
+	return icon
+end
 
-local soon = Instance.new("Frame")
-soon.Name = "Soon"
-soon.Visible = false
-soon.Position = UDim2.fromOffset(14, SIZE + LIP + 18)
-soon.Size = UDim2.fromOffset(250, 92)
-soon.BackgroundColor3 = Color3.fromRGB(28, 24, 40)
-soon.BorderSizePixel = 0
-soon.Parent = gui
-local soonCorner = Instance.new("UICorner")
-soonCorner.CornerRadius = UDim.new(0, 14)
-soonCorner.Parent = soon
-local soonTitle = Instance.new("TextLabel")
-soonTitle.BackgroundTransparency = 1
-soonTitle.Position = UDim2.fromOffset(14, 10)
-soonTitle.Size = UDim2.new(1, -28, 0, 20)
-soonTitle.Font = Enum.Font.GothamBold
-soonTitle.TextSize = 15
-soonTitle.TextXAlignment = Enum.TextXAlignment.Left
-soonTitle.TextColor3 = Color3.fromRGB(255, 214, 140)
-soonTitle.Text = "Скоро"
-soonTitle.Parent = soon
-local soonBody = Instance.new("TextLabel")
-soonBody.BackgroundTransparency = 1
-soonBody.Position = UDim2.fromOffset(14, 32)
-soonBody.Size = UDim2.new(1, -28, 0, 48)
-soonBody.Font = Enum.Font.Gotham
-soonBody.TextSize = 13
-soonBody.TextWrapped = true
-soonBody.TextXAlignment = Enum.TextXAlignment.Left
-soonBody.TextYAlignment = Enum.TextYAlignment.Top
-soonBody.TextColor3 = Color3.fromRGB(232, 226, 244)
-soonBody.Text = "Здесь будут инвентарь, магазин, колесо, квесты и лидерборд."
-soonBody.Parent = soon
+bag.BackgroundColor3 = Color3.fromRGB(232, 156, 64)
+bagLip.BackgroundColor3 = Color3.fromRGB(168, 96, 32)
+local bagGradient = Instance.new("UIGradient")
+bagGradient.Rotation = 90
+bagGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(0.42, Color3.fromRGB(246, 246, 246)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(188, 188, 188)),
+})
+bagGradient.Parent = bag
+local bagStroke = Instance.new("UIStroke")
+bagStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+bagStroke.Color = Color3.fromRGB(255, 255, 255)
+bagStroke.Thickness = 1.5
+bagStroke.Transparency = 0.4
+bagStroke.Parent = bag
+local bagGloss = Instance.new("Frame")
+bagGloss.Position = UDim2.fromOffset(9, 6)
+bagGloss.Size = UDim2.new(1, -18, 0, 8)
+bagGloss.BackgroundColor3 = Color3.new(1, 1, 1)
+bagGloss.BackgroundTransparency = 0.68
+bagGloss.BorderSizePixel = 0
+bagGloss.Active = false
+bagGloss.ZIndex = 3
+bagGloss.Parent = bag
+local bagGlossCorner = Instance.new("UICorner")
+bagGlossCorner.CornerRadius = UDim.new(1, 0)
+bagGlossCorner.Parent = bagGloss
+bagIcon().Parent = bag
 
 local bagScale = Instance.new("UIScale")
 bagScale.Parent = bagSlot
@@ -453,9 +499,22 @@ bag.MouseButton1Up:Connect(function()
 	TweenService:Create(bag, pressTween, { Position = UDim2.fromOffset(0, 0) }):Play()
 end)
 bag.Activated:Connect(function()
-	soon.Visible = not soon.Visible
 	click.TimePosition = 0
 	click:Play()
+	if player:GetAttribute("InMatch") ~= nil then
+		return
+	end
+	if Hub.current() == "inventory" then
+		Hub.close()
+	else
+		Hub.show("inventory")
+	end
 end)
+
+local function showBag()
+	bagSlot.Visible = player:GetAttribute("InMatch") == nil
+end
+player:GetAttributeChangedSignal("InMatch"):Connect(showBag)
+showBag()
 
 return {}

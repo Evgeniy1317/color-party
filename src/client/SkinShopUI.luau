@@ -7,6 +7,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
+local Hub = require(script.Parent:WaitForChild("Hub"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
@@ -44,15 +46,15 @@ local TRAIL_ICONS: { [string]: string } = {
 }
 
 local sections = {
-	{ id = "skins", title = "Скины" },
-	{ id = "perks", title = "Плюшки" },
-	{ id = "trails", title = "Следы" },
+	{ id = "skins", title = "Skins" },
+	{ id = "perks", title = "Perks" },
+	{ id = "trails", title = "Trails" },
 }
 local filters = {
-	{ id = "all", title = "Все" },
-	{ id = "female", title = "Женские" },
-	{ id = "male", title = "Мужские" },
-	{ id = "unisex", title = "Общие" },
+	{ id = "all", title = "All" },
+	{ id = "female", title = "Female" },
+	{ id = "male", title = "Male" },
+	{ id = "unisex", title = "Unisex" },
 }
 
 local section = "skins"
@@ -101,9 +103,9 @@ dim.Parent = gui
 
 local panel = Instance.new("Frame")
 panel.Name = "Panel"
-panel.AnchorPoint = Vector2.new(0.5, 0.5)
-panel.Position = UDim2.fromScale(0.5, 0.5)
-panel.Size = UDim2.fromScale(0.82, 0.78)
+panel.AnchorPoint = Vector2.new(0.5, 0)
+panel.Position = UDim2.new(0.5, 0, 0, 106)
+panel.Size = UDim2.new(0.82, 0, 1, -150)
 panel.BackgroundColor3 = PANEL
 panel.BorderSizePixel = 0
 panel.Parent = gui
@@ -181,7 +183,7 @@ title.Font = Enum.Font.GothamBlack
 title.TextSize = 28
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = WHITE
-title.Text = "Магазин"
+title.Text = Locale.t("Shop")
 title.Parent = panel
 
 local close = Instance.new("TextButton")
@@ -295,7 +297,7 @@ previewName.Font = Enum.Font.GothamBlack
 previewName.TextSize = 20
 previewName.TextXAlignment = Enum.TextXAlignment.Left
 previewName.TextColor3 = WHITE
-previewName.Text = "Магазин"
+previewName.Text = Locale.t("Shop")
 previewName.Parent = preview
 
 local previewBlurb = Instance.new("TextLabel")
@@ -358,7 +360,7 @@ notice.Font = Enum.Font.Gotham
 notice.TextSize = 13
 notice.TextXAlignment = Enum.TextXAlignment.Left
 notice.TextColor3 = MUTED
-notice.Text = "Нажми на карточку — персонаж появится слева до покупки"
+notice.Text = Locale.t("Tap a card — the character shows on the left before you buy")
 notice.Parent = catalog
 
 local scroll = Instance.new("ScrollingFrame")
@@ -408,7 +410,9 @@ local function matches(name: string): boolean
 	if query == "" then
 		return true
 	end
-	return string.find(string.lower(name), query, 1, true) ~= nil
+	local folded = string.lower(name)
+	local shown = string.lower(Locale.t(name))
+	return string.find(folded, query, 1, true) ~= nil or string.find(shown, query, 1, true) ~= nil
 end
 
 local function clearWorld()
@@ -522,7 +526,7 @@ local function showLook(kind: string, id: string)
 	local sourceId = if kind == "skin" then id else if state.equipped ~= "" then state.equipped else "sakura"
 	local template = Skins.model(sourceId)
 	if not template then
-		loading.Text = "Модель ещё не в игре"
+		loading.Text = Locale.t("Model isn't in the game yet")
 		return
 	end
 	local model = template:Clone()
@@ -680,7 +684,7 @@ local function fillPerk(id: string, ownedForever: boolean)
 	clearBuy()
 	if ownedForever then
 		resetBuyChrome()
-		priceButton("Навсегда", Color3.fromRGB(70, 64, 88), WHITE, nil, nil, true, function() end)
+		priceButton(Locale.t("Forever"), Color3.fromRGB(70, 64, 88), WHITE, nil, nil, true, function() end)
 		return
 	end
 	expandBuyChrome()
@@ -700,12 +704,12 @@ local function fillPerk(id: string, ownedForever: boolean)
 		have.Font = Enum.Font.GothamBold
 		have.TextSize = 13
 		have.TextColor3 = GOLD
-		have.Text = "В запасе на матч: " .. tostring(stored)
+		have.Text = Locale.fmt("Stored for a match: %d", stored)
 		have.LayoutOrder = 0
 		have.Parent = buyRow
 	end
-	perkLine("1 матч", 1, id, sale(Shop.onceCoins(id)), Shop.onceRobux(id), true)
-	perkLine("Навсегда", 2, id, sale(item.coins), item.robux, false)
+	perkLine(Locale.t("1 match"), 1, id, sale(Shop.onceCoins(id)), Shop.onceRobux(id), true)
+	perkLine(Locale.t("Forever"), 2, id, sale(item.coins), item.robux, false)
 end
 
 local function fillBuy(kind: string, id: string, price: number, robux: number, ownedItem: boolean, equipped: boolean)
@@ -713,11 +717,11 @@ local function fillBuy(kind: string, id: string, price: number, robux: number, o
 	resetBuyChrome()
 	price = sale(price)
 	if ownedItem and kind == "perk" then
-		priceButton("Куплено", Color3.fromRGB(70, 64, 88), WHITE, nil, nil, true, function() end)
+		priceButton(Locale.t("Bought"), Color3.fromRGB(70, 64, 88), WHITE, nil, nil, true, function() end)
 		return
 	end
 	if ownedItem or price <= 0 then
-		priceButton(if equipped then "Надето" else "Надеть", if equipped then Color3.fromRGB(70, 64, 88) else GREEN, if equipped then WHITE else Color3.fromRGB(20, 32, 24), nil, nil, true, function()
+		priceButton(if equipped then Locale.t("Wearing") else Locale.t("Equip"), if equipped then Color3.fromRGB(70, 64, 88) else GREEN, if equipped then WHITE else Color3.fromRGB(20, 32, 24), nil, nil, true, function()
 			if equipped and kind == "skin" then
 				Remotes.get("Skins"):FireServer("clear")
 			elseif equipped and kind == "trail" then
@@ -795,8 +799,8 @@ local function describeSelection()
 			return
 		end
 		local price = Shop.coins(skin.id, skin.price)
-		previewName.Text = skin.name
-		previewBlurb.Text = skin.blurb
+		previewName.Text = Locale.t(skin.name)
+		previewBlurb.Text = Locale.t(skin.blurb)
 		local ownedItem = owns(skin.id) or price <= 0
 		fillBuy("skin", skin.id, price, Shop.robux(skin.id), ownedItem, state.equipped == skin.id)
 		showAvatar()
@@ -808,8 +812,8 @@ local function describeSelection()
 		if not item or item.kind ~= "perk" then
 			return
 		end
-			previewName.Text = item.name
-		previewBlurb.Text = item.blurb
+			previewName.Text = Locale.t(item.name)
+		previewBlurb.Text = Locale.t(item.blurb)
 		fillPerk(item.id, owns(item.id))
 		showPerk(item.id)
 	else
@@ -817,8 +821,8 @@ local function describeSelection()
 		if not item then
 			return
 		end
-		previewName.Text = item.name
-		previewBlurb.Text = item.blurb
+		previewName.Text = Locale.t(item.name)
+		previewBlurb.Text = Locale.t(item.blurb)
 		fillBuy("trail", item.id, item.coins, item.robux, owns(item.id), state.trail == item.id)
 		showAvatar()
 		showLook("trail", item.id)
@@ -914,7 +918,7 @@ local function card(id: string, order: number, nameText: string, image: string?,
 	name.TextXAlignment = Enum.TextXAlignment.Left
 	name.TextYAlignment = Enum.TextYAlignment.Top
 	name.TextColor3 = WHITE
-	name.Text = nameText
+	name.Text = Locale.t(nameText)
 	name.Parent = button
 	button.Activated:Connect(function()
 		selectedId = id
@@ -969,9 +973,9 @@ local function rebuild()
 	coinLabel.Text = money(state.coins)
 	robuxLabel.Text = if robuxBalance then money(robuxBalance) else "—"
 	if state.notice ~= "" then
-		notice.Text = state.notice
+		notice.Text = Locale.translate(state.notice)
 	elseif state.discount > 0 then
-		notice.Text = "Скидка " .. tostring(state.discount) .. "% на следующую покупку за монеты"
+		notice.Text = Locale.fmt("%d%% off your next coin purchase", state.discount)
 	end
 	paintTabs()
 	local seen = false
@@ -1037,13 +1041,27 @@ local function rebuild()
 	describeSelection()
 end
 
+local function present(on: boolean)
+	if on then
+		state.notice = ""
+		setOpen(true)
+		shownKey = ""
+		rebuild()
+		Remotes.get("Skins"):FireServer("state")
+	else
+		setOpen(false)
+	end
+end
+
+Hub.bind("shop", present)
+
 for index, category in sections do
 	local button = Instance.new("TextButton")
 	button.LayoutOrder = index
 	button.Size = UDim2.fromOffset(108, 32)
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 14
-	button.Text = category.title
+	button.Text = Locale.t(category.title)
 	button.AutoButtonColor = true
 	button.BorderSizePixel = 0
 	button.Parent = toolbar
@@ -1067,7 +1085,7 @@ search.Size = UDim2.fromOffset(150, 26)
 search.BackgroundColor3 = INK
 search.Font = Enum.Font.Gotham
 search.TextSize = 13
-search.PlaceholderText = "Поиск"
+search.PlaceholderText = Locale.t("Search")
 search.PlaceholderColor3 = MUTED
 search.TextColor3 = WHITE
 search.Text = ""
@@ -1085,7 +1103,7 @@ for index, category in filters do
 	button.Size = UDim2.fromOffset(96, 26)
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 13
-	button.Text = category.title
+	button.Text = Locale.t(category.title)
 	button.AutoButtonColor = true
 	button.BorderSizePixel = 0
 	button.Parent = filterRow
@@ -1165,10 +1183,10 @@ task.spawn(function()
 end)
 
 dim.Activated:Connect(function()
-	setOpen(false)
+	Hub.close()
 end)
 close.Activated:Connect(function()
-	setOpen(false)
+	Hub.close()
 end)
 
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -1176,13 +1194,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.Escape or (input.KeyCode == Enum.KeyCode.E and not search:IsFocused()) then
-		setOpen(false)
-	end
-end)
-
-player:GetAttributeChangedSignal("InMatch"):Connect(function()
-	if player:GetAttribute("InMatch") ~= nil then
-		setOpen(false)
+		Hub.close()
 	end
 end)
 
@@ -1203,11 +1215,7 @@ task.spawn(function()
 			if player:GetAttribute("InMatch") ~= nil then
 				return
 			end
-			state.notice = ""
-			setOpen(true)
-			shownKey = ""
-			rebuild()
-			Remotes.get("Skins"):FireServer("state")
+			Hub.show("shop")
 		end)
 	end
 end)

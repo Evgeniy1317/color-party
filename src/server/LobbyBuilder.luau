@@ -64,10 +64,10 @@ local ARENA_COLORS = {
 -- Четыре стойки ровно через 90°, в стороне от окна (около 90°) и двери паркура (около 270°).
 -- yaw — доворот модели, чтобы лицо смотрело в центр лобби.
 local ZONES = {
-	{ id = "Skins", title = "Магазин", angle = 45, yaw = 0, accent = Color3.fromRGB(196, 92, 92), model = "SkinShop", asset = TOOLBOX.SkinShop, tall = 20, wide = 32 },
-	{ id = "Wheel", title = "Колесо\nфортуны", angle = 135, yaw = 180, accent = Color3.fromRGB(164, 120, 196), model = "FortuneWheel", asset = TOOLBOX.FortuneWheel, tall = 24, wide = 22 },
-	{ id = "Board", title = "Лидеры", angle = 225, yaw = 0, accent = Color3.fromRGB(196, 148, 64), model = "LeaderTrophy", asset = TOOLBOX.LeaderTrophy, tall = 22, wide = 16 },
-	{ id = "Quest", title = "Квесты", angle = 315, yaw = 0, accent = Color3.fromRGB(92, 132, 176), model = "QuestBoard", asset = TOOLBOX.QuestBoard, tall = 18, wide = 26 },
+	{ id = "Skins", title = "Shop", angle = 45, yaw = 0, accent = Color3.fromRGB(196, 92, 92), model = "SkinShop", asset = TOOLBOX.SkinShop, tall = 20, wide = 32 },
+	{ id = "Wheel", title = "Wheel\nof fortune", angle = 135, yaw = 180, accent = Color3.fromRGB(164, 120, 196), model = "FortuneWheel", asset = TOOLBOX.FortuneWheel, tall = 24, wide = 22 },
+	{ id = "Board", title = "Leaders", angle = 225, yaw = 0, accent = Color3.fromRGB(196, 148, 64), model = "LeaderTrophy", asset = TOOLBOX.LeaderTrophy, tall = 22, wide = 16 },
+	{ id = "Quest", title = "Quests", angle = 315, yaw = 0, accent = Color3.fromRGB(92, 132, 176), model = "QuestBoard", asset = TOOLBOX.QuestBoard, tall = 18, wide = 26 },
 }
 
 local CHECKPOINT_SCRIPT = [=[
@@ -639,7 +639,7 @@ local function buildArenaBoard(parent: Instance, cf: CFrame): BasePart
 	title.Font = Enum.Font.GothamBlack
 	title.TextSize = 42
 	title.TextColor3 = dark
-	title.Text = "КТО СЕЙЧАС ИГРАЕТ"
+	title.Text = "WHO'S PLAYING"
 	title.Parent = header
 
 	local function columnHead(labelName: string, x: number, text: string, align: Enum.TextXAlignment)
@@ -655,8 +655,8 @@ local function buildArenaBoard(parent: Instance, cf: CFrame): BasePart
 		l.Text = text
 		l.Parent = gui
 	end
-	columnHead("HeadArena", 0.08, "АРЕНА", Enum.TextXAlignment.Left)
-	columnHead("HeadPlayers", 0.5, "ИГРОКИ", Enum.TextXAlignment.Right)
+	columnHead("HeadArena", 0.08, "ARENA", Enum.TextXAlignment.Left)
+	columnHead("HeadPlayers", 0.5, "PLAYERS", Enum.TextXAlignment.Right)
 
 	for index = 1, 6 do
 		local row = Instance.new("Frame")
@@ -678,7 +678,7 @@ local function buildArenaBoard(parent: Instance, cf: CFrame): BasePart
 		name.TextSize = 30
 		name.TextXAlignment = Enum.TextXAlignment.Left
 		name.TextColor3 = white
-		name.Text = "Арена  " .. index
+		name.Text = "Arena  " .. index
 		name.Parent = row
 		local count = Instance.new("TextLabel")
 		count.Name = "C" .. index
@@ -707,7 +707,7 @@ local function buildArenaBoard(parent: Instance, cf: CFrame): BasePart
 	queue.Font = Enum.Font.GothamBold
 	queue.TextSize = 26
 	queue.TextColor3 = Color3.fromRGB(186, 236, 206)
-	queue.Text = "Готовы к матчу    0 / 5"
+	queue.Text = "Ready    0 / 5"
 	queue.Parent = footer
 	return sign
 end
@@ -988,9 +988,9 @@ function LobbyBuilder.buildPodiums(world: Folder)
 			local _, boardSize = exhibit:GetBoundingBox()
 			local boardWide = math.max(boardSize.X, boardSize.Z)
 			local notes = {
-				{ -0.24, 0.22, Color3.fromRGB(255, 244, 214), "Победа" },
-				{ 0.24, 0.16, Color3.fromRGB(255, 214, 214), "Серия" },
-				{ 0.0, -0.24, Color3.fromRGB(214, 232, 255), "Монеты" },
+				{ -0.24, 0.22, Color3.fromRGB(255, 244, 214), "Win" },
+				{ 0.24, 0.16, Color3.fromRGB(255, 214, 214), "Streak" },
+				{ 0.0, -0.24, Color3.fromRGB(214, 232, 255), "Coins" },
 			}
 			local pivot = exhibit:GetPivot()
 			for index, note in notes do
@@ -1795,7 +1795,7 @@ function LobbyBuilder.buildParkour(world: Folder)
 
 	-- 12. Лавовый каньон: дальше и злее, чем первая половина.
 	local lavaMark = mark(5, 4, 0)
-	marker(lavaMark, "ЛАВА", Color3.fromRGB(255, 120, 48), 5)
+	marker(lavaMark, "LAVA", Color3.fromRGB(255, 120, 48), 5)
 
 	local function lavaSpan(zStart: number, zEnd: number, halfX: number, pitY: number?)
 		local surface = pitY or y
@@ -1931,7 +1931,7 @@ function LobbyBuilder.buildParkour(world: Folder)
 	local pitY = y
 	local lavaSpring = block("LavaSpring", 3, Vector3.new(6, 0.6, 6), 0, Color3.fromRGB(255, 120, 48))
 	lavaSpring:SetAttribute("Bounce", 90)
-	marker(lavaSpring, "ЛАВА", Color3.fromRGB(255, 140, 60), 3)
+	marker(lavaSpring, "LAVA", Color3.fromRGB(255, 140, 60), 3)
 	local afterSpring = edge
 	y += 15
 	block("LavaCatch", 8, Vector3.new(12, 1.2, 10), 0, white)
@@ -2288,8 +2288,8 @@ function LobbyBuilder.buildConsole(world: Folder)
 	local sign = buildArenaBoard(console, boardCf)
 	local ready = Instance.new("ProximityPrompt")
 	ready.Name = "ReadyPrompt"
-	ready.ActionText = "Готов к матчу"
-	ready.ObjectText = "Табло арен"
+	ready.ActionText = "Ready for a match"
+	ready.ObjectText = "Arena board"
 	ready.HoldDuration = 0
 	ready.MaxActivationDistance = 12
 	ready.RequiresLineOfSight = false
@@ -2352,8 +2352,8 @@ function LobbyBuilder.buildConsole(world: Folder)
 
 	local watch = Instance.new("ProximityPrompt")
 	watch.Name = "WatchPrompt"
-	watch.ActionText = "Смотреть арены"
-	watch.ObjectText = "Подзорная труба"
+	watch.ActionText = "Watch arenas"
+	watch.ObjectText = "Spyglass"
 	watch.HoldDuration = 0
 	watch.MaxActivationDistance = 12
 	watch.RequiresLineOfSight = false

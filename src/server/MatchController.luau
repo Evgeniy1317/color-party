@@ -256,7 +256,7 @@ end
 function MatchController:idleLook()
 	TileLayout.idle(self:tiles(), self.rng)
 	self:setBeacons(IDLE_GLOW)
-	self:setScreen("ОЖИДАНИЕ ИГРОКОВ", "Нажми ГОТОВ в лобби, чтобы сыграть", Color3.fromRGB(44, 42, 58))
+	self:setScreen("WAITING FOR PLAYERS", "Press READY in the lobby to play", Color3.fromRGB(44, 42, 58))
 end
 
 -- Плиты нужного цвета остаются на обоих этажах. Остальные пропадают.
@@ -397,7 +397,7 @@ function MatchController:shrink(count: number)
 		end
 	end
 	if removed > 0 then
-		self:feed("Арена сжимается! Исчезло плит: " .. removed, "warn")
+		self:feed(string.format("Arena is shrinking! Tiles gone: %d", removed), "warn")
 	end
 end
 
@@ -873,7 +873,7 @@ function MatchController:spawnBonus()
 		end
 	end
 	if spawned then
-		self:feed(if kind == "Shield" then "На арене щит — подбери его" else "На арене рывок — подбери молнию", "bonus")
+		self:feed(if kind == "Shield" then "A shield is on the arena — pick it up" else "A dash is on the arena — pick up the bolt", "bonus")
 	end
 end
 
@@ -1115,13 +1115,13 @@ function MatchController:tryRevive(p: Participant): boolean
 	if p.spare then
 		p.spare = false
 		p.player:SetAttribute("Lives", 1)
-		return self:rescue(p, p.player.DisplayName .. " цепляется за девятую жизнь!")
+		return self:rescue(p, string.format("%s clings to a ninth life!", p.player.DisplayName))
 	end
 	if p.revived or p.player:GetAttribute("PerkRevive") ~= true then
 		return false
 	end
 	p.revived = true
-	return self:rescue(p, p.player.DisplayName .. " воскрес!")
+	return self:rescue(p, string.format("%s is back!", p.player.DisplayName))
 end
 
 local function parkUnderArena(self: MatchController, player: Player)
@@ -1177,7 +1177,7 @@ function MatchController:eliminate(p: Participant, reason: string)
 		parkUnderArena(self, p.player)
 		Economy.recordRounds(p.player, p.rounds)
 		local info = self:info()
-		self:feed(p.player.DisplayName .. (if reason == "left" then " покинул матч" else " выбыл!") .. "  Осталось: " .. info.alive, "out")
+		self:feed(string.format(if reason == "left" then "%s left the match  Left: %d" else "%s is out!  Left: %d", p.player.DisplayName, info.alive), "out")
 		Remotes.get("MatchState"):FireClient(p.player, {
 			phase = "eliminated",
 			slot = self.slot,
@@ -1228,7 +1228,7 @@ function MatchController:beginCatch(p: Participant, root: BasePart)
 	p.catchHold = 0
 	p.player:SetAttribute("Lives", 1)
 	p.player:SetAttribute("Streak", 0)
-	self:feed(p.player.DisplayName .. " упал на нижний этаж!", "fall")
+	self:feed(string.format("%s dropped to the lower floor!", p.player.DisplayName), "fall")
 	ensureGroups(p.player)
 	PhysicsService:CollisionGroupSetCollidable(playerGroup(p.player), catchGroup(p.player), true)
 	if p.player.Character then
@@ -1643,9 +1643,9 @@ function MatchController:run()
 	self:watch()
 
 	self:setBeacons(Color3.fromRGB(255, 255, 255))
-	self:setScreen("ПРИГОТОВЬТЕСЬ", "Игроков: " .. #self.participants, Color3.fromRGB(44, 42, 58))
+	self:setScreen("GET READY", string.format("Players: %d", #self.participants), Color3.fromRGB(44, 42, 58))
 	self:send({ phase = "prepare", timeLeft = Config.PREPARE_TIME, total = #self.participants })
-	self:feed("Матч начинается! Игроков: " .. #self.participants, "info")
+	self:feed(string.format("Match starting! Players: %d", #self.participants), "info")
 	task.wait(Config.PREPARE_TIME)
 
 	local lastTarget: string? = nil
@@ -1659,11 +1659,11 @@ function MatchController:run()
 		self:paintRound(rule)
 		local shownId = rule.shown[1]
 		if rule.mode == "exclude" then
-			self:setScreen("КРОМЕ: " .. nameOf(shownId), "Раунд " .. self.round .. " · встань на ЛЮБОЙ другой цвет", colorOf(shownId))
+			self:setScreen("EXCEPT: " .. nameOf(shownId), string.format("Round %d · stand on ANY other color", self.round), colorOf(shownId))
 		elseif rule.mode == "double" then
-			self:setScreen(nameOf(rule.shown[1]) .. " или " .. nameOf(rule.shown[2]), "Раунд " .. self.round .. " · два цвета", colorOf(rule.shown[1]))
+			self:setScreen(nameOf(rule.shown[1]) .. " or " .. nameOf(rule.shown[2]), string.format("Round %d · two colors", self.round), colorOf(rule.shown[1]))
 		else
-			self:setScreen(nameOf(shownId), "Раунд " .. self.round .. " · встань на этот цвет!", colorOf(shownId))
+			self:setScreen(nameOf(shownId), string.format("Round %d · stand on this color!", self.round), colorOf(shownId))
 		end
 		self:setBeacons(colorOf(shownId))
 		self:spawnCoins()
@@ -1685,7 +1685,7 @@ function MatchController:run()
 		-- Ожидание с возможной обманкой.
 		if rule.mode == "fake" and rule.fakeTo then
 			task.wait(math.max(0.2, rule.time - Config.FAKE_BEFORE_END))
-			self:setScreen(nameOf(rule.fakeTo), "СМЕНА ЦВЕТА!", colorOf(rule.fakeTo))
+			self:setScreen(nameOf(rule.fakeTo), "COLOR CHANGE!", colorOf(rule.fakeTo))
 			self:setBeacons(colorOf(rule.fakeTo))
 			self:send({ phase = "fake", shown = { rule.fakeTo }, colors = { packColor(rule.fakeTo) }, time = Config.FAKE_BEFORE_END })
 			task.wait(Config.FAKE_BEFORE_END)
@@ -1788,8 +1788,8 @@ function MatchController:finish()
 		world:SetAttribute("LastWinner", table.concat(names, ", "))
 	end
 
-	local winnerText = if #names == 0 then "НИЧЬЯ" elseif #names == 1 then names[1] else "ПОБЕДИТЕЛИ: " .. #names
-	self:setScreen(if #names == 1 then "ПОБЕДИТЕЛЬ: " .. names[1] else winnerText, "Раундов сыграно: " .. self.round, GOLD)
+	local winnerText = if #names == 0 then "DRAW" elseif #names == 1 then names[1] else string.format("WINNERS: %d", #names)
+	self:setScreen(if #names == 1 then string.format("WINNER: %s", names[1]) else winnerText, string.format("Rounds played: %d", self.round), GOLD)
 	self:setBeacons(GOLD)
 	for _, w in winners do
 		if w.player:GetAttribute("PerkSalute") == true or Economy.ownsSkin(w.player, "perk_salute") then
@@ -1798,7 +1798,7 @@ function MatchController:finish()
 		end
 	end
 	self:send({ phase = "results", winners = names, standings = standings, timeLeft = Config.RESULTS_TIME, round = self.round })
-	self:feed((if #names == 1 then names[1] .. " побеждает!" else "Матч окончен!"), "win")
+	self:feed((if #names == 1 then string.format("%s wins!", names[1]) else "Match over!"), "win")
 	for _, p in self.participants do
 		if p.player.Parent then
 			task.spawn(Economy.save, p.player)

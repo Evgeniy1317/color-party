@@ -2,13 +2,29 @@
 -- Точка входа клиента Color Party: интерфейс готовности, HUD матча,
 -- камера-трансляция и эффекты.
 
-require(script:WaitForChild("Effects"))
-require(script:WaitForChild("SpectatorCam"))
-require(script:WaitForChild("ReadyUI"))
-require(script:WaitForChild("RoundHUD"))
-require(script:WaitForChild("LobbyMusic"))
-require(script:WaitForChild("SkinShopUI"))
-require(script:WaitForChild("WheelUI"))
-require(script:WaitForChild("LeaderboardUI"))
-require(script:WaitForChild("QuestUI"))
-require(script:WaitForChild("Perks"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function start(name: string)
+	local ok, err = pcall(function()
+		require(script:WaitForChild(name))
+	end)
+	if not ok then
+		warn("[ColorParty] " .. name .. " не запустился: " .. tostring(err))
+	end
+end
+
+pcall(function()
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale")).install()
+end)
+
+start("Effects")
+start("SpectatorCam")
+start("ReadyUI")
+start("RoundHUD")
+start("LobbyMusic")
+start("SkinShopUI")
+start("WheelUI")
+start("LeaderboardUI")
+start("QuestUI")
+start("InventoryUI")
+start("Perks")

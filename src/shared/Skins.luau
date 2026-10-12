@@ -17,16 +17,16 @@ export type Skin = {
 }
 
 local LIST: { Skin } = {
-	{ id = "sakura", name = "Сакура", category = "female", price = 12000, blurb = "Светлые волосы и лепестки сакуры", asset = 125685551242959 },
-	{ id = "hoodie", name = "Худи", category = "female", price = 8000, blurb = "Розовое худи и тёмные джинсы", asset = 112633262552629 },
-	{ id = "gothic", name = "Готика", category = "female", price = 18000, blurb = "Шляпа, ленты и тёмный наряд", asset = 72363006872822 },
-	{ id = "night", name = "Ночь", category = "female", price = 15000, blurb = "Чёрные волосы и рога", asset = 129459713841790 },
-	{ id = "neko", name = "Кошка", category = "female", price = 14000, blurb = "Кошачьи уши и чёрный наряд", asset = 17545998689 },
-	{ id = "city", name = "Куртка", category = "male", price = 11000, blurb = "Городская куртка и кроссовки", asset = 14957799952 },
-	{ id = "summer", name = "Лето", category = "female", price = 13000, blurb = "Бирюзовая куртка и серые джинсы", asset = 104635170766402 },
-	{ id = "specs", name = "Очки", category = "unisex", price = 15000, blurb = "Чёрный костюм и круглые очки", asset = 128135767367443 },
-	{ id = "dood", name = "Козырёк", category = "male", price = 18000, blurb = "Синяя куртка, козырёк и сумка", asset = 10979055843 },
-	{ id = "emerald", name = "Изумруд", category = "unisex", price = 17000, blurb = "Зелёные латы", asset = 8175455331 },
+	{ id = "sakura", name = "Sakura", category = "female", price = 12000, blurb = "Light hair and sakura petals", asset = 125685551242959 },
+	{ id = "hoodie", name = "Hoodie", category = "female", price = 8000, blurb = "Pink hoodie and dark jeans", asset = 112633262552629 },
+	{ id = "gothic", name = "Gothic", category = "female", price = 18000, blurb = "Hat, ribbons, and a dark outfit", asset = 72363006872822 },
+	{ id = "night", name = "Night", category = "female", price = 15000, blurb = "Black hair and horns", asset = 129459713841790 },
+	{ id = "neko", name = "Neko", category = "female", price = 14000, blurb = "Cat ears and a black outfit", asset = 17545998689 },
+	{ id = "city", name = "Jacket", category = "male", price = 11000, blurb = "City jacket and sneakers", asset = 14957799952 },
+	{ id = "summer", name = "Summer", category = "female", price = 13000, blurb = "Teal jacket and grey jeans", asset = 104635170766402 },
+	{ id = "specs", name = "Glasses", category = "unisex", price = 15000, blurb = "Black suit and round glasses", asset = 128135767367443 },
+	{ id = "dood", name = "Visor", category = "male", price = 18000, blurb = "Blue jacket, visor, and a bag", asset = 10979055843 },
+	{ id = "emerald", name = "Emerald", category = "unisex", price = 17000, blurb = "Green armor", asset = 8175455331 },
 }
 
 local BY_ID: { [string]: Skin } = {}

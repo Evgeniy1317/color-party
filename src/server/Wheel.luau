@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Economy = require(script.Parent:WaitForChild("Economy"))
+local Locale = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Locale"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 local Shop = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Shop"))
 local SkinShop = require(script.Parent:WaitForChild("SkinShop"))
@@ -38,16 +39,16 @@ end
 local function grant(player: Player, sectorId: string): (string, string, string)
 	if sectorId == "coins_s" then
 		Economy.addCoins(player, 1500, "wheel")
-		return "1 500 монет", "Монеты уже на счету", WheelConfig.icon("coins_s")
+		return "1,500 coins", "Coins are already on your balance", WheelConfig.icon("coins_s")
 	elseif sectorId == "coins_m" then
 		Economy.addCoins(player, 4000, "wheel")
-		return "4 000 монет", "Монеты уже на счету", WheelConfig.icon("coins_m")
+		return "4,000 coins", "Coins are already on your balance", WheelConfig.icon("coins_m")
 	elseif sectorId == "coins_l" then
 		Economy.addCoins(player, 12000, "wheel")
-		return "12 000 монет", "Монеты уже на счету", WheelConfig.icon("coins_l")
+		return "12,000 coins", "Coins are already on your balance", WheelConfig.icon("coins_l")
 	elseif sectorId == "discount" then
 		Economy.setDiscount(player, math.max(Economy.discount(player), 30))
-		return "Скидка 30%", "Следующая покупка за монеты в магазине дешевле", WheelConfig.icon("discount")
+		return "30% off", "Your next coin shop purchase is 30% cheaper", WheelConfig.icon("discount")
 	elseif sectorId == "skin" then
 		local open = {}
 		for _, skin in Skins.all() do
@@ -57,12 +58,12 @@ local function grant(player: Player, sectorId: string): (string, string, string)
 		end
 		if #open == 0 then
 			Economy.addCoins(player, 4000, "wheel")
-			return "4 000 монет", "Все скины уже есть, вместо скина — монеты", WheelConfig.icon("coins_m")
+			return "4,000 coins", "Every skin is already yours, so this is coins instead", WheelConfig.icon("coins_m")
 		end
 		local skin = open[rng:NextInteger(1, #open)]
 		SkinShop.grant(player, skin.id)
 		local thumb = "rbxthumb://type=Asset&id=" .. tostring(skin.asset) .. "&w=150&h=150"
-		return skin.name, "Скин надет. Он в магазине, во вкладке скинов", thumb
+		return skin.name, "The skin is equipped. It's in the shop, on the Skins tab", thumb
 	elseif sectorId == "match" then
 		local open = {}
 		for _, item in Shop.perks() do
@@ -72,11 +73,11 @@ local function grant(player: Player, sectorId: string): (string, string, string)
 		end
 		if #open == 0 then
 			Economy.addCoins(player, 4000, "wheel")
-			return "4 000 монет", "Все плюшки уже навсегда, вместо эффекта — монеты", WheelConfig.icon("coins_m")
+			return "4,000 coins", "Every perk is already forever, so this is coins instead", WheelConfig.icon("coins_m")
 		end
 		local item = open[rng:NextInteger(1, #open)]
 		Economy.addCharge(player, item.id, 1)
-		return item.name, "Заряд на один матч уже в магазине, на иконке плюшки", WheelConfig.icon(item.id)
+		return item.name, "A one-match charge is already in the shop, on the perk icon", WheelConfig.icon(item.id)
 	elseif sectorId == "trail" then
 		local open = {}
 		for _, item in Shop.trails() do
@@ -86,11 +87,11 @@ local function grant(player: Player, sectorId: string): (string, string, string)
 		end
 		if #open == 0 then
 			Economy.addCoins(player, 4000, "wheel")
-			return "4 000 монет", "Все следы уже есть, вместо следа — монеты", WheelConfig.icon("coins_m")
+			return "4,000 coins", "Every trail is already yours, so this is coins instead", WheelConfig.icon("coins_m")
 		end
 		local item = open[rng:NextInteger(1, #open)]
 		SkinShop.grant(player, item.id)
-		return item.name, "След надет. Он в магазине, во вкладке «Следы»", WheelConfig.icon(item.id)
+		return item.name, "The trail is equipped. It's in the shop, on the Trails tab", WheelConfig.icon(item.id)
 	end
 	local open = {}
 	for _, item in Shop.perks() do
@@ -100,11 +101,11 @@ local function grant(player: Player, sectorId: string): (string, string, string)
 	end
 	if #open == 0 then
 		Economy.addCoins(player, 6000, "wheel")
-		return "6 000 монет", "Все плюшки уже навсегда, вместо приза — монеты", WheelConfig.icon("coins_l")
+		return "6,000 coins", "Every perk is already forever, so this prize is coins", WheelConfig.icon("coins_l")
 	end
 	local item = open[rng:NextInteger(1, #open)]
 	SkinShop.grant(player, item.id)
-	return item.name, "Плюшка уже в магазине и включена", WheelConfig.icon(item.id)
+	return item.name, "The perk is already in the shop and turned on", WheelConfig.icon(item.id)
 end
 
 local function rollAngle(index: number): number
@@ -151,26 +152,26 @@ end
 
 local function begin(player: Player, mode: string)
 	if player:GetAttribute("InMatch") ~= nil then
-		pack(player, { ok = false, notice = "Колесо только в лобби" })
+		pack(player, { ok = false, notice = Locale.forPlayer(player, "Wheel is only in the lobby") })
 		return
 	end
 	if busy[player] then
-		pack(player, { ok = false, notice = "Колесо ещё крутится" })
+		pack(player, { ok = false, notice = Locale.forPlayer(player, "The wheel is still spinning") })
 		return
 	end
 	if mode == "free" then
 		if not Economy.useFreeSpin(player) then
-			pack(player, { ok = false, notice = "Бесплатный спин уже был сегодня" })
+			pack(player, { ok = false, notice = Locale.forPlayer(player, "The free spin was already used today") })
 			return
 		end
 	elseif mode == "coins" then
 		if Economy.coins(player) < WheelConfig.SPIN_COINS then
-			pack(player, { ok = false, notice = "Не хватает монет" })
+			pack(player, { ok = false, notice = Locale.forPlayer(player, "Not enough coins") })
 			return
 		end
 		Economy.addCoins(player, -WheelConfig.SPIN_COINS, "wheel")
 	else
-		pack(player, { ok = false, notice = "Так крутить нельзя" })
+		pack(player, { ok = false, notice = Locale.forPlayer(player, "You can't spin like that") })
 		return
 	end
 	busy[player] = true
@@ -198,21 +199,21 @@ function Wheel.grantPaid(player: Player)
 	end)
 	local result = spin(player)
 	if result then
-		result.detail = "Оплачено робуксами. " .. tostring(result.detail)
+		result.detail = Locale.forPlayer(player, "Paid with Robux. %s", Locale.forPlayer(player, tostring(result.detail)))
 		pack(player, result)
 	end
 end
 
 local function buyRobux(player: Player)
 	if player:GetAttribute("InMatch") ~= nil then
-		pack(player, { ok = false, notice = "Колесо только в лобби" })
+		pack(player, { ok = false, notice = Locale.forPlayer(player, "Wheel is only in the lobby") })
 		return
 	end
 	local productId = WheelConfig.productId()
 	if productId <= 0 then
 		pack(player, {
 			ok = false,
-			notice = "Робуксы: создай Developer Product и впиши id в Shop под ключом wheel. Цена " .. tostring(WheelConfig.SPIN_ROBUX) .. " R$",
+			notice = Locale.forPlayer(player, "Robux: create a Developer Product and put its id in Shop under wheel. Price %d R$", WheelConfig.SPIN_ROBUX),
 		})
 		return
 	end
@@ -238,8 +239,8 @@ local function attachPrompt()
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "WheelPrompt"
-	prompt.ActionText = "Крутить"
-	prompt.ObjectText = "Колесо"
+	prompt.ActionText = "Spin"
+	prompt.ObjectText = "Wheel"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 16
